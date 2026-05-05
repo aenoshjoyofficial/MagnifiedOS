@@ -1,0 +1,8 @@
+{
+  "name": "magnified-existence-os-root",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --prefix User && npm run build --prefix Admin",
+    "install-all": "npm install --prefix User && npm install --prefix Admin"
+  }
+}
