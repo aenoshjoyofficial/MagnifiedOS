@@ -1,0 +1,271 @@
+'use client';
+
+import React, { useState } from 'react';
+import { 
+  Box, 
+  Typography, 
+  LinearProgress, 
+  Button,
+  Stack,
+  CircularProgress
+} from '@mui/material';
+import { 
+  ChevronLeft,
+  CheckCircle2,
+  Lock,
+  PlayCircle,
+  Trophy
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import AudioTask from '@/components/Tasks/AudioTask';
+import VideoTask from '@/components/Tasks/VideoTask';
+import TextTask from '@/components/Tasks/TextTask';
+import ChecklistTask from '@/components/Tasks/ChecklistTask';
+import { useAuthStore } from '@/store/useStore';
+import { useMyEnrollment, useCompleteTask } from '@/lib/queries';
+import { supabase } from '@/lib/supabase';
+
+const TodayPractice = () => {
+  const { user } = useAuthStore();
+  const [targetUserId, setTargetUserId] = React.useState<string | null>(user?.id || null);
+
+  React.useEffect(() => {
+    const findUserId = async () => {
+      if (user?.id) {
+        setTargetUserId(user.id);
+        return;
+      }
+      const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', 'aenoshjoy@gmail.com')
+        .single();
+      if (data) setTargetUserId(data.id);
+    };
+    findUserId();
+  }, [user]);
+
+  const { data: enrollment, isLoading } = useMyEnrollment(targetUserId || '');
+  const completeTaskMutation = useCompleteTask();
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+        <CircularProgress sx={{ color: '#D4AF37' }} />
+      </Box>
+    );
+  }
+
+  if (!enrollment) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center' }}>
+        <Typography variant="h5">No active enrollment found.</Typography>
+        <Button component={Link} to="/dashboard" sx={{ mt: 2 }}>Back to Dashboard</Button>
+      </Box>
+    );
+  }
+
+  const program = enrollment.programs;
+  const startedAt = new Date(enrollment.started_at);
+  const daysSinceStart = Math.max(1, Math.floor((new Date().getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  
+  // Flatten all lessons and find the one for the current day
+  const allLessons = program.modules.sort((a: any, b: any) => a.order_index - b.order_index)
+    .flatMap((m: any) => m.lessons.sort((la: any, lb: any) => la.day_number - lb.day_number));
+  
+  const currentLesson = allLessons[daysSinceStart - 1] || allLessons[allLessons.length - 1];
+  const tasks = currentLesson?.tasks || [];
+  const completions = enrollment.task_completions || [];
+  
+  const completedTasks = tasks.filter((t: any) => completions.some((c: any) => c.task_id === t.id));
+  const isDayComplete = completedTasks.length === tasks.length && tasks.length > 0;
+
+  const handleTaskComplete = async (taskId: string) => {
+    if (completions.some((c: any) => c.task_id === taskId)) return;
+    
+    await completeTaskMutation.mutateAsync({
+      enrollmentId: enrollment.id,
+      taskId: taskId
+    });
+  };
+
+  return (
+    <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10 }}>
+      {/* Header */}
+      <Box sx={{ mb: 4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Button 
+            component={Link} 
+            to="/dashboard" 
+            startIcon={<ChevronLeft size={18} />}
+            sx={{ color: '#B0B0B0', p: 0, minWidth: 0, '&:hover': { background: 'transparent', color: '#EAEAEA' } }}
+          >
+            Back to Dashboard
+          </Button>
+        </Box>
+
+        <Typography variant="overline" sx={{ color: '#D4AF37', fontWeight: 700, letterSpacing: 2 }}>
+          DAY {daysSinceStart} • {currentLesson?.title?.toUpperCase() || 'PRACTICE'}
+        </Typography>
+        <Typography variant="h3" sx={{ fontWeight: 800, mt: 0.5, mb: 2 }}>
+          {currentLesson?.title || 'Daily Integration'}
+        </Typography>
+
+        <Box sx={{ p: 2.5, borderRadius: 3, backgroundColor: 'rgba(212, 175, 55, 0.05)', border: '1px solid rgba(212, 175, 55, 0.1)' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>Daily Progress</Typography>
+            <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 600 }}>{completedTasks.length}/{tasks.length} Tasks</Typography>
+          </Box>
+          <LinearProgress 
+            variant="determinate" 
+            value={tasks.length > 0 ? (completedTasks.length / tasks.length) * 100 : 0} 
+            sx={{ 
+              height: 6, 
+              borderRadius: 3,
+              backgroundColor: 'rgba(212, 175, 55, 0.1)',
+              '& .MuiLinearProgress-bar': { backgroundColor: '#D4AF37' }
+            }} 
+          />
+        </Box>
+      </Box>
+
+      {/* Task List */}
+      <Stack spacing={2} sx={{ mb: 6 }}>
+        {tasks.map((task: any, index: number) => (
+          <TaskCard 
+            key={task.id} 
+            task={task} 
+            index={index} 
+            isCompleted={completions.some((c: any) => c.task_id === task.id)}
+            onComplete={() => handleTaskComplete(task.id)} 
+          />
+        ))}
+        {tasks.length === 0 && (
+          <Typography sx={{ textAlign: 'center', py: 4, color: '#666' }}>No tasks found for today.</Typography>
+        )}
+      </Stack>
+
+      {/* Global Actions */}
+      <Box sx={{ textAlign: 'center' }}>
+        {isDayComplete ? (
+          <Box sx={{ p: 4, borderRadius: 4, backgroundColor: 'rgba(76, 175, 80, 0.05)', border: '1px solid rgba(76, 175, 80, 0.2)' }}>
+            <Trophy size={48} color="#4CAF50" style={{ marginBottom: 16 }} />
+            <Typography variant="h5" sx={{ fontWeight: 800, color: '#4CAF50', mb: 1 }}>Day Complete!</Typography>
+            <Typography variant="body2" sx={{ color: '#B0B0B0', mb: 3 }}>
+              You have successfully integrated today's neural protocols.
+            </Typography>
+            <Button variant="outlined" component={Link} to="/dashboard" sx={{ borderColor: '#4CAF50', color: '#4CAF50' }}>Return to Dashboard</Button>
+          </Box>
+        ) : (
+          <Button 
+            variant="contained" 
+            disabled={true}
+            sx={{ 
+              backgroundColor: '#D4AF37', 
+              color: '#0B0B0F',
+              px: 6,
+              py: 2,
+              fontSize: '1.1rem',
+              fontWeight: 800,
+              borderRadius: 10,
+              boxShadow: '0 8px 32px rgba(212, 175, 55, 0.2)',
+              '&.Mui-disabled': { backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'rgba(255, 255, 255, 0.2)' }
+            }}
+          >
+            Complete All Tasks to Finish Day
+          </Button>
+        )}
+      </Box>
+    </Box>
+  );
+};
+
+const TaskCard = ({ task, index, isCompleted, onComplete }: { task: any, index: number, isCompleted: boolean, onComplete: () => void }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isLocked = false; // Simplified for now
+
+  const renderTaskContent = () => {
+    switch (task.type) {
+      case 'audio':
+        return <AudioTask url={task.content?.url} onComplete={onComplete} />;
+      case 'video':
+        return <VideoTask url={task.content?.url} onComplete={onComplete} />;
+      case 'text':
+        return <TextTask content={task.content?.text || task.description} onComplete={onComplete} />;
+      case 'checklist':
+        return <ChecklistTask steps={task.content?.steps || []} onComplete={onComplete} />;
+      default:
+        return <Button onClick={onComplete}>Complete Task</Button>;
+    }
+  };
+
+  return (
+    <Box 
+      sx={{ 
+        p: 2.5, 
+        borderRadius: 3, 
+        backgroundColor: isLocked ? 'rgba(255, 255, 255, 0.02)' : 'rgba(18, 18, 23, 1)',
+        border: '1px solid',
+        borderColor: isCompleted ? 'rgba(212, 175, 55, 0.3)' : isLocked ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.1)',
+        opacity: isLocked ? 0.6 : 1,
+        transition: 'all 0.3s ease',
+        cursor: isLocked ? 'not-allowed' : 'pointer',
+        '&:hover': !isLocked ? {
+          borderColor: 'rgba(212, 175, 55, 0.5)',
+          backgroundColor: 'rgba(255, 255, 255, 0.03)'
+        } : {}
+      }}
+      onClick={() => !isLocked && setIsExpanded(!isExpanded)}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
+          <Box 
+            sx={{ 
+              width: 48, 
+              height: 48, 
+              borderRadius: '50%', 
+              backgroundColor: isCompleted ? 'rgba(212, 175, 55, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: isCompleted ? '#D4AF37' : '#B0B0B0'
+            }}
+          >
+            {isCompleted ? <CheckCircle2 size={24} /> : isLocked ? <Lock size={24} /> : <PlayCircle size={24} />}
+          </Box>
+          <Box>
+            <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 700, fontSize: '0.75rem', letterSpacing: 1 }}>
+              TASK {index + 1} • {task.type?.toUpperCase()}
+            </Typography>
+            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+              {task.title}
+            </Typography>
+          </Box>
+        </Box>
+        <Box sx={{ textAlign: 'right' }}>
+          <Typography variant="body2" sx={{ color: '#B0B0B0', fontWeight: 500 }}>
+            {task.content?.duration || '5 min'}
+          </Typography>
+        </Box>
+      </Box>
+
+      {isExpanded && !isLocked && (
+        <Box 
+          sx={{ mt: 3, pt: 3, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}
+          onClick={(e) => e.stopPropagation()} // Prevent collapse when interacting with content
+        >
+          <Typography variant="body1" sx={{ color: '#B0B0B0', mb: 3 }}>
+            {task.description}
+          </Typography>
+          
+          <Box sx={{ mt: 2 }}>
+            {renderTaskContent()}
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+export default TodayPractice;
+

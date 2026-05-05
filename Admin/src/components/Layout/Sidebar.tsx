@@ -1,0 +1,159 @@
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { 
+  Box, 
+  Drawer, 
+  List, 
+  ListItem, 
+  ListItemButton, 
+  ListItemIcon, 
+  ListItemText, 
+  Typography, 
+  IconButton,
+  Tooltip,
+  Divider
+} from '@mui/material';
+import { 
+  LayoutDashboard, 
+  Users,
+  PlusCircle,
+  Calendar,
+  CheckSquare,
+  LogOut,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
+import { useUIStore } from '@/store/useStore';
+
+const navItems = [
+  { label: 'Admin Home', path: '/admin', icon: LayoutDashboard },
+  { label: 'User Management', path: '/admin/users', icon: Users },
+  { label: 'Program Builder', path: '/admin/program-builder', icon: PlusCircle },
+  { label: 'Collective Sessions', path: '/admin/sessions', icon: Calendar },
+  { label: 'Member Bookings', path: '/admin/bookings', icon: CheckSquare },
+];
+
+const Sidebar = () => {
+  const location = useLocation();
+  const pathname = location.pathname;
+  const { isSidebarOpen, toggleSidebar } = useUIStore();
+
+  const drawerWidth = isSidebarOpen ? 260 : 80;
+
+  return (
+    <Drawer
+      variant="permanent"
+      sx={{
+        width: drawerWidth,
+        flexShrink: 0,
+        '& .MuiDrawer-paper': {
+          width: drawerWidth,
+          boxSizing: 'border-box',
+          backgroundColor: '#0B0B0F',
+          borderRight: '1px solid rgba(212, 175, 55, 0.1)',
+          transition: 'width 0.3s ease',
+          overflowX: 'hidden',
+        },
+      }}
+    >
+      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', justifyContent: isSidebarOpen ? 'space-between' : 'center' }}>
+        {isSidebarOpen && (
+          <Link to="/admin" style={{ textDecoration: 'none' }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, color: '#D4AF37', letterSpacing: -0.5 }}>
+              MAGNIFIED ADMIN
+            </Typography>
+          </Link>
+        )}
+        <IconButton onClick={toggleSidebar} size="small" sx={{ color: '#D4AF37' }}>
+          {isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+        </IconButton>
+      </Box>
+
+      <List sx={{ px: 1.5 }}>
+        {navItems.map((item) => {
+          const isActive = pathname === item.path;
+          const Icon = item.icon;
+
+          return (
+            <ListItem key={item.path} disablePadding sx={{ display: 'block', mb: 0.5 }}>
+              <Tooltip title={!isSidebarOpen ? item.label : ''} placement="right">
+                <ListItemButton
+                  component={Link}
+                  to={item.path}
+                  sx={{
+                    minHeight: 48,
+                    justifyContent: isSidebarOpen ? 'initial' : 'center',
+                    px: 2.5,
+                    borderRadius: 2,
+                    backgroundColor: isActive ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
+                    color: isActive ? '#D4AF37' : '#EAEAEA',
+                    '&:hover': {
+                      backgroundColor: 'rgba(212, 175, 55, 0.05)',
+                    },
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 0,
+                      mr: isSidebarOpen ? 2 : 'auto',
+                      justifyContent: 'center',
+                      color: isActive ? '#D4AF37' : 'inherit',
+                    }}
+                  >
+                    <Icon size={22} />
+                  </ListItemIcon>
+                  {isSidebarOpen && (
+                    <ListItemText 
+                      primary={item.label} 
+                      slotProps={{
+                        primary: { 
+                          sx: {
+                            fontWeight: isActive ? 600 : 400,
+                            fontSize: '0.95rem'
+                          }
+                        }
+                      }} 
+                    />
+                  )}
+                </ListItemButton>
+              </Tooltip>
+            </ListItem>
+          );
+        })}
+      </List>
+
+      <Box sx={{ mt: 'auto', mb: 2, px: 1.5 }}>
+        <Divider sx={{ mb: 2, opacity: 0.1, backgroundColor: '#D4AF37' }} />
+        <ListItem disablePadding sx={{ display: 'block' }}>
+          <ListItemButton
+            sx={{
+              minHeight: 48,
+              justifyContent: isSidebarOpen ? 'initial' : 'center',
+              px: 2.5,
+              borderRadius: 2,
+              color: '#B0B0B0',
+              '&:hover': {
+                color: '#FF4B4B',
+                backgroundColor: 'rgba(255, 75, 75, 0.05)',
+              },
+            }}
+          >
+            <ListItemIcon
+              sx={{
+                minWidth: 0,
+                mr: isSidebarOpen ? 2 : 'auto',
+                justifyContent: 'center',
+                color: 'inherit',
+              }}
+            >
+              <LogOut size={22} />
+            </ListItemIcon>
+            {isSidebarOpen && <ListItemText primary="Logout" />}
+          </ListItemButton>
+        </ListItem>
+      </Box>
+    </Drawer>
+  );
+};
+
+export default Sidebar;
