@@ -96,7 +96,7 @@ const MyProgram = () => {
       </Box>
 
       <Stack spacing={2}>
-        {program.modules.sort((a: any, b: any) => a.order_index - b.order_index).map((module: any) => {
+        {program.modules.map((module: any) => {
           const status = getModuleStatus(module);
           return (
             <Accordion 
@@ -131,7 +131,7 @@ const MyProgram = () => {
               </AccordionSummary>
               <AccordionDetails sx={{ px: 0, pt: 0 }}>
                 <Stack>
-                  {module.lessons.sort((a: any, b: any) => a.day_number - b.day_number).map((lesson: any) => {
+                  {module.lessons.map((lesson: any) => {
                     const dayStatus = getDayStatus(lesson);
                     const isLocked = status === 'locked';
                     

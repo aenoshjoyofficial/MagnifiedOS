@@ -70,8 +70,7 @@ const TodayPractice = () => {
   const daysSinceStart = Math.max(1, Math.floor((new Date().getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24)) + 1);
   
   // Flatten all lessons and find the one for the current day
-  const allLessons = program.modules.sort((a: any, b: any) => a.order_index - b.order_index)
-    .flatMap((m: any) => m.lessons.sort((la: any, lb: any) => la.day_number - lb.day_number));
+  const allLessons = program.modules.flatMap((m: any) => m.lessons);
   
   const currentLesson = allLessons[daysSinceStart - 1] || allLessons[allLessons.length - 1];
   const tasks = currentLesson?.tasks || [];
