@@ -1,7 +1,32 @@
 :root {
-  --background: #0B0B0F;
-  --foreground: #EAEAEA;
-  --accent: #D4AF37;
+  /* Background Colors */
+  --bg-deep: #0B0B0F;
+  --bg-night: #030712;
+  --bg-temple: #031B14;
+  
+  /* Emerald Palette */
+  --emerald-primary: #10B981;
+  --emerald-light: #34D399;
+  --emerald-mid: #0B2A22;
+  --emerald-dark: #061A14;
+  --emerald-deep: #020C0A;
+
+  /* Gold Palette */
+  --gold-primary: #D4AF37;
+  --gold-light: #F5D76E;
+  --gold-glow-color: rgba(212, 175, 55, 0.3);
+
+  /* Gradients */
+  --emerald-radial: radial-gradient(circle at center, #0F3D2E 0%, #0B0B0F 70%);
+  --bodywork-gradient: linear-gradient(to bottom, #061A14, #0B2A22, #020C0A);
+  --temple-gradient: linear-gradient(to bottom, #0B0A07, #1A140B, #020201);
+
+  /* Glow Effects */
+  --emerald-glow: 0 0 40px rgba(16, 185, 129, 0.15);
+  --gold-glow: 0 0 40px rgba(212, 175, 55, 0.15);
+
+  --foreground: #FFFFFF;
+  --text-secondary: #94A3B8;
 }
 
 * {
@@ -14,13 +39,18 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  background-color: var(--background);
+  background-color: var(--bg-deep);
   color: var(--foreground);
-  font-family: var(--font-inter), sans-serif;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-outfit), sans-serif;
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 a {
@@ -30,26 +60,43 @@ a {
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0B0B0F;
+  background: var(--bg-deep);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2A2A2E;
-  border-radius: 4px;
+  background: var(--emerald-mid);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3A3A3E;
+  background: var(--emerald-primary);
 }
 
 /* Glassmorphism utility */
 .glass {
-  background: rgba(18, 18, 23, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(212, 175, 55, 0.1);
+  background: rgba(3, 7, 18, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--emerald-mid);
 }
+
+.emerald-glow-text {
+  text-shadow: var(--emerald-glow);
+}
+
+.gold-glow-text {
+  text-shadow: var(--gold-glow);
+}
+
+.temple-bg {
+  background: var(--temple-gradient);
+}
+
+.emerald-radial-bg {
+  background: var(--emerald-radial);
+}
+

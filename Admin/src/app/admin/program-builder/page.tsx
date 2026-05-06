@@ -139,7 +139,13 @@ const ProgramBuilder = () => {
 
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-  const handleSave = async (overrides = {}) => {
+  const handleSave = async (overrides: any = {}) => {
+    // Prevent saving if title is empty (unless we are passing a title in overrides)
+    if (!programData.title && !overrides.title) return;
+    
+    // Prevent multiple simultaneous saves for new programs to avoid duplicate records
+    if (!programId && saveProgramMutation.isPending) return;
+
     try {
       const payload = {
         ...programData,
@@ -162,9 +168,13 @@ const ProgramBuilder = () => {
       }
       
       return saved;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Save failed:', err);
-      setNotification({ open: true, message: 'Failed to save program changes.', severity: 'error' });
+      setNotification({ 
+        open: true, 
+        message: `Failed to save changes: ${err.message || 'Unknown error'}`, 
+        severity: 'error' 
+      });
       throw err;
     }
   };
@@ -403,11 +413,11 @@ const ProgramBuilder = () => {
             onClick={handlePublish}
             disabled={saveProgramMutation.isPending || !programData.title}
             sx={{ 
-              backgroundColor: '#D4AF37', 
+              backgroundColor: 'var(--emerald-primary)', 
               color: '#0B0B0F', 
               fontWeight: 700,
-              '&:hover': { backgroundColor: '#B8962D' },
-              '&.Mui-disabled': { backgroundColor: 'rgba(212, 175, 55, 0.2)' }
+              '&:hover': { backgroundColor: 'var(--emerald-light)' },
+              '&.Mui-disabled': { backgroundColor: 'var(--emerald-mid)', opacity: 0.5 }
             }}
           >
             {saveProgramMutation.isPending ? 'Publishing...' : 'Publish Program'}
@@ -433,9 +443,9 @@ const ProgramBuilder = () => {
                     justifyContent: 'flex-start',
                     px: 2,
                     py: 1.5,
-                    color: activeTab === tab.id ? '#D4AF37' : '#B0B0B0',
-                    backgroundColor: activeTab === tab.id ? 'rgba(212, 175, 55, 0.05)' : 'transparent',
-                    '&:hover': { backgroundColor: 'rgba(212, 175, 55, 0.03)' }
+                    color: activeTab === tab.id ? 'var(--emerald-primary)' : '#B0B0B0',
+                    backgroundColor: activeTab === tab.id ? 'var(--emerald-mid)' : 'transparent',
+                    '&:hover': { backgroundColor: 'var(--emerald-dark)' }
                   }}
                 >
                   {tab.label}
@@ -448,8 +458,8 @@ const ProgramBuilder = () => {
         {/* Content Area */}
         <Grid size={{ xs: 12, md: 9 }}>
           {/* Program Selector */}
-          <Paper sx={{ p: 2, mb: 3, display: 'flex', alignItems: 'center', gap: 2, backgroundColor: 'rgba(212, 175, 55, 0.05)', border: '1px solid rgba(212, 175, 55, 0.1)' }}>
-            <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 700 }}>ACTIVE PROGRAM:</Typography>
+          <Paper sx={{ p: 2, mb: 3, display: 'flex', alignItems: 'center', gap: 2, backgroundColor: 'var(--emerald-deep)', border: '1px solid var(--emerald-mid)' }}>
+            <Typography variant="body2" sx={{ color: 'var(--emerald-primary)', fontWeight: 700 }}>ACTIVE PROGRAM:</Typography>
             <FormControl size="small" sx={{ minWidth: 300 }}>
               <Select 
                 value={programId || 'new'} 
@@ -478,7 +488,7 @@ const ProgramBuilder = () => {
                     placeholder="e.g., Inner Reset: The 30-Day Sovereignty Protocol" 
                     value={programData.title}
                     onChange={(e) => setProgramData({...programData, title: e.target.value})}
-                    onBlur={handleSave}
+                    onBlur={() => handleSave()}
                   />
                 </Box>
                 <Box>
@@ -490,35 +500,19 @@ const ProgramBuilder = () => {
                     placeholder="Describe the transformation..." 
                     value={programData.description}
                     onChange={(e) => setProgramData({...programData, description: e.target.value})}
-                    onBlur={handleSave}
+                    onBlur={() => handleSave()}
                   />
                 </Box>
                 <Grid container spacing={2}>
-                  <Grid size={{ xs: 6 }}>
+                  <Grid size={{ xs: 12 }}>
                     <Typography variant="subtitle2" sx={{ mb: 1, color: '#B0B0B0', fontWeight: 700 }}>DURATION (DAYS)</Typography>
                     <TextField 
                       fullWidth 
                       type="number" 
                       value={programData.duration_days}
                       onChange={(e) => setProgramData({...programData, duration_days: parseInt(e.target.value)})}
-                      onBlur={handleSave}
+                      onBlur={() => handleSave()}
                     />
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1, color: '#B0B0B0', fontWeight: 700 }}>VISIBILITY</Typography>
-                    <Select 
-                      fullWidth 
-                      value={programData.is_published ? 'public' : 'draft'}
-                      onChange={(e) => {
-                        const isPub = e.target.value === 'public';
-                        setProgramData({...programData, is_published: isPub});
-                        // Immediate save for select
-                        saveProgramMutation.mutate({ ...programData, is_published: isPub, id: programId || undefined });
-                      }}
-                    >
-                      <MenuItem value="draft">Private Draft</MenuItem>
-                      <MenuItem value="public">Publicly Available</MenuItem>
-                    </Select>
                   </Grid>
                 </Grid>
                 <Box>
@@ -546,8 +540,8 @@ const ProgramBuilder = () => {
                         position: 'relative',
                         transition: 'all 0.3s',
                         '&:hover': { 
-                          borderColor: '#D4AF37', 
-                          backgroundColor: 'rgba(212, 175, 55, 0.02)',
+                          borderColor: 'var(--emerald-primary)', 
+                          backgroundColor: 'var(--emerald-mid)',
                           '& .upload-overlay': { opacity: 1 }
                         } 
                       }}
@@ -566,8 +560,8 @@ const ProgramBuilder = () => {
                             opacity: 0,
                             transition: 'opacity 0.3s'
                           }}>
-                            <Upload size={32} color="#D4AF37" />
-                            <Typography variant="button" sx={{ mt: 1, color: '#D4AF37' }}>Change Image</Typography>
+                            <Upload size={32} color="var(--emerald-primary)" />
+                            <Typography variant="button" sx={{ mt: 1, color: 'var(--emerald-primary)' }}>Change Image</Typography>
                           </Box>
                         </>
                       ) : (
@@ -580,7 +574,7 @@ const ProgramBuilder = () => {
                       
                       {uploadAssetMutation.isPending && (
                         <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
-                          <CircularProgress sx={{ color: '#D4AF37' }} />
+                          <CircularProgress sx={{ color: 'var(--emerald-primary)' }} />
                         </Box>
                       )}
                     </Box>
@@ -602,7 +596,7 @@ const ProgramBuilder = () => {
                   startIcon={saveModuleMutation.isPending ? <CircularProgress size={14} /> : <Plus size={16} />} 
                   onClick={handleAddModule}
                   disabled={saveModuleMutation.isPending}
-                  sx={{ color: '#D4AF37', fontWeight: 700 }}
+                  sx={{ color: 'var(--emerald-primary)', fontWeight: 700 }}
                 >
                   Add Module
                 </Button>
@@ -611,10 +605,10 @@ const ProgramBuilder = () => {
               {!programId ? (
                 <Box sx={{ py: 8, textAlign: 'center' }}>
                   <Typography variant="body1" sx={{ color: '#666', mb: 2 }}>Please save the program settings first to start building modules.</Typography>
-                  <Button variant="outlined" onClick={() => setActiveTab('settings')} sx={{ color: '#D4AF37', borderColor: 'rgba(212, 175, 55, 0.3)' }}>Return to Settings</Button>
+                  <Button variant="outlined" onClick={() => setActiveTab('settings')} sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}>Return to Settings</Button>
                 </Box>
               ) : isLoadingDetails ? (
-                <Box sx={{ py: 8, textAlign: 'center' }}><CircularProgress size={30} sx={{ color: '#D4AF37' }} /></Box>
+                <Box sx={{ py: 8, textAlign: 'center' }}><CircularProgress size={30} sx={{ color: 'var(--emerald-primary)' }} /></Box>
               ) : (
                 <Stack spacing={3}>
                   {localModules?.map((module, mIdx) => (
@@ -634,7 +628,7 @@ const ProgramBuilder = () => {
                         <IconButton size="small" sx={{ p: 0, color: '#444' }}>
                           {expandedModules.includes(module.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                         </IconButton>
-                        <Typography variant="subtitle2" sx={{ color: '#D4AF37', fontWeight: 800 }}>M{mIdx + 1}</Typography>
+                        <Typography variant="subtitle2" sx={{ color: 'var(--emerald-primary)', fontWeight: 800 }}>M{mIdx + 1}</Typography>
                         <TextField 
                           fullWidth 
                           variant="standard" 
@@ -714,7 +708,7 @@ const ProgramBuilder = () => {
                                 py: 1, 
                                 border: '1px dashed rgba(255, 255, 255, 0.1)', 
                                 color: '#666',
-                                '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.02)', borderColor: '#D4AF37' }
+                                '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.02)', borderColor: 'var(--emerald-primary)' }
                               }}
                             >
                               Add Lesson
@@ -728,7 +722,7 @@ const ProgramBuilder = () => {
                   {programDetails?.modules?.length === 0 && (
                     <Box sx={{ py: 8, textAlign: 'center', border: '2px dashed rgba(255, 255, 255, 0.05)', borderRadius: 4 }}>
                       <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>No modules found in this journey yet.</Typography>
-                      <Button variant="contained" onClick={handleAddModule} sx={{ backgroundColor: 'rgba(212, 175, 55, 0.1)', color: '#D4AF37' }}>Create First Module</Button>
+                      <Button variant="contained" onClick={handleAddModule} sx={{ backgroundColor: 'var(--emerald-mid)', color: 'var(--emerald-primary)' }}>Create First Module</Button>
                     </Box>
                   )}
                 </Stack>
@@ -748,13 +742,13 @@ const ProgramBuilder = () => {
               {!programId ? (
                 <Box sx={{ py: 8, textAlign: 'center' }}>
                   <Typography variant="body1" sx={{ color: '#666', mb: 2 }}>Please save the program settings first.</Typography>
-                  <Button variant="outlined" onClick={() => setActiveTab('settings')} sx={{ color: '#D4AF37' }}>Return to Settings</Button>
+                  <Button variant="outlined" onClick={() => setActiveTab('settings')} sx={{ color: 'var(--emerald-primary)' }}>Return to Settings</Button>
                 </Box>
               ) : (
                 <Stack spacing={4}>
                   {localModules?.map((module, mIdx) => (
                     <Box key={module.id}>
-                      <Typography variant="subtitle2" sx={{ color: '#D4AF37', fontWeight: 800, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="subtitle2" sx={{ color: 'var(--emerald-primary)', fontWeight: 800, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                         <GripVertical size={14} /> MODULE {mIdx + 1}: {module.title}
                       </Typography>
                       <Stack spacing={2}>
@@ -795,7 +789,7 @@ const ProgramBuilder = () => {
                                   {task.type === 'checklist' && <CheckSquare size={16} color="#4CAF50" />}
                                   {task.type === 'audio' && <Mic size={16} color="#2196F3" />}
                                   {task.type === 'video' && <PlayCircle size={16} color="#f44336" />}
-                                  {task.type === 'text' && <MessageSquare size={16} color="#D4AF37" />}
+                                  {task.type === 'text' && <MessageSquare size={16} color="var(--emerald-primary)" />}
                                   
                                   <TextField 
                                     fullWidth 
@@ -828,7 +822,7 @@ const ProgramBuilder = () => {
                                           <IconButton 
                                             size="small" 
                                             component="span" 
-                                            sx={{ color: task.content?.url ? '#D4AF37' : '#666' }}
+                                            sx={{ color: task.content?.url ? 'var(--emerald-primary)' : '#666' }}
                                             title={task.content?.url ? 'Change File' : 'Upload File'}
                                           >
                                             {uploadAssetMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <Upload size={14} />}
@@ -838,7 +832,7 @@ const ProgramBuilder = () => {
                                     )}
                                     
                                     {task.content?.url && (
-                                      <IconButton size="small" sx={{ color: '#D4AF37' }} onClick={() => window.open(task.content.url, '_blank')}>
+                                      <IconButton size="small" sx={{ color: 'var(--emerald-primary)' }} onClick={() => window.open(task.content.url, '_blank')}>
                                         <LinkIcon size={14} />
                                       </IconButton>
                                     )}
