@@ -187,6 +187,27 @@ export const useSaveProgram = () => {
 };
 
 /**
+ * Delete a Program
+ */
+export const useDeleteProgram = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (programId: string) => {
+      const { error } = await supabase
+        .from('programs')
+        .delete()
+        .eq('id', programId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['programs'] });
+    },
+  });
+};
+
+/**
  * Enroll a user in a program
  */
 export const useEnrollUser = () => {

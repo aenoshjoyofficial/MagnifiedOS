@@ -47,7 +47,8 @@ import {
   useDeleteTask, 
   useUploadAsset,
   useDeleteModule,
-  useDeleteLesson 
+  useDeleteLesson,
+  useDeleteProgram
 } from '@/lib/queries';
 
 const ProgramBuilder = () => {
@@ -61,6 +62,7 @@ const ProgramBuilder = () => {
   const deleteTaskMutation = useDeleteTask();
   const deleteModuleMutation = useDeleteModule();
   const deleteLessonMutation = useDeleteLesson();
+  const deleteProgramMutation = useDeleteProgram();
   const uploadAssetMutation = useUploadAsset();
   const { data: allPrograms } = usePrograms();
 
@@ -194,6 +196,27 @@ const ProgramBuilder = () => {
       setNotification({ open: true, message: 'Draft saved successfully.', severity: 'success' });
     } catch (err) {
       // Error handled in handleSave
+    }
+  };
+
+  const handleDeleteProgram = async () => {
+    if (!programId) return;
+    if (!window.confirm('CRITICAL: Are you sure you want to delete this entire program? This will permanently remove all modules, lessons, and tasks. This action cannot be undone.')) return;
+
+    try {
+      await deleteProgramMutation.mutateAsync(programId);
+      setNotification({ open: true, message: 'Program deleted successfully.', severity: 'success' });
+      setProgramId(null);
+      setProgramData({
+        title: '',
+        description: '',
+        duration_days: 30,
+        cover_image: '',
+        is_published: false
+      });
+      setActiveTab('settings');
+    } catch (err: any) {
+      setNotification({ open: true, message: `Failed to delete program: ${err.message}`, severity: 'error' });
     }
   };
 
@@ -580,6 +603,36 @@ const ProgramBuilder = () => {
                     </Box>
                   </label>
                 </Box>
+
+                {programId && (
+                  <>
+                    <Divider sx={{ my: 2, opacity: 0.1 }} />
+                    <Box sx={{ pt: 2 }}>
+                      <Typography variant="subtitle2" sx={{ mb: 2, color: '#f44336', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Trash2 size={16} /> DANGER ZONE
+                      </Typography>
+                      <Paper sx={{ p: 3, border: '1px solid rgba(244, 67, 54, 0.2)', backgroundColor: 'rgba(244, 67, 54, 0.02)' }}>
+                        <Typography variant="body2" sx={{ mb: 2, color: '#B0B0B0' }}>
+                          Deleting this program will permanently remove all its content and member enrollments. This action is irreversible.
+                        </Typography>
+                        <Button 
+                          variant="outlined" 
+                          color="error"
+                          startIcon={deleteProgramMutation.isPending ? <CircularProgress size={18} color="error" /> : <Trash2 size={18} />}
+                          onClick={handleDeleteProgram}
+                          disabled={deleteProgramMutation.isPending}
+                          sx={{ 
+                            fontWeight: 700,
+                            borderColor: 'rgba(244, 67, 54, 0.5)',
+                            '&:hover': { backgroundColor: 'rgba(244, 67, 54, 0.05)', borderColor: '#f44336' }
+                          }}
+                        >
+                          {deleteProgramMutation.isPending ? 'Deleting...' : 'Delete Entire Program'}
+                        </Button>
+                      </Paper>
+                    </Box>
+                  </>
+                )}
               </Stack>
             </Paper>
           )}
