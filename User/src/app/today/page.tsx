@@ -110,6 +110,20 @@ const TodayPractice = () => {
           {currentLesson?.title || 'Daily Integration'}
         </Typography>
 
+        {currentLesson?.description && (
+          <Typography 
+            variant="body1" 
+            sx={{ 
+              color: '#B0B0B0', 
+              mb: 3,
+              lineHeight: 1.6,
+              '& ul, & ol': { pl: 3, my: 1 },
+              '& p': { my: 1 }
+            }}
+            dangerouslySetInnerHTML={{ __html: currentLesson.description }}
+          />
+        )}
+
         <Box sx={{ p: 2.5, borderRadius: 3, backgroundColor: 'rgba(212, 175, 55, 0.05)', border: '1px solid rgba(212, 175, 55, 0.1)' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>Daily Progress</Typography>

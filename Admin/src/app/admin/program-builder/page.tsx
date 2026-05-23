@@ -19,6 +19,10 @@ import {
   Alert,
   Snackbar
 } from '@mui/material';
+import RichTextEditor from '@/components/RichTextEditor';
+import DescriptionIcon from '@mui/icons-material/Description';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Save, 
@@ -125,6 +129,14 @@ const ProgramBuilder = () => {
     );
   };
 
+  const [expandedLessons, setExpandedLessons] = useState<string[]>([]);
+
+  const toggleExpandedLesson = (lessonId: string) => {
+    setExpandedLessons(prev =>
+      prev.includes(lessonId) ? prev.filter(id => id !== lessonId) : [...prev, lessonId]
+    );
+  };
+
   // Sync data when switching programs
   useEffect(() => {
     if (programDetails) {
@@ -137,7 +149,7 @@ const ProgramBuilder = () => {
       });
       setLocalModules(programDetails.modules || []);
     }
-  }, [programId, !!programDetails]); // Only sync when programId changes or details first load
+  }, [programId, programDetails]); // Only sync when programId changes or details first load
 
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
@@ -248,7 +260,7 @@ const ProgramBuilder = () => {
         unlock_day: (module?.lessons?.length || 0) + 1
       });
       
-      setLocalModules(localModules.map(m => 
+      setLocalModules(prev => prev.map(m => 
         m.id === moduleId ? { ...m, lessons: [...(m.lessons || []), { ...newLesson, tasks: [] }] } : m
       ));
       setNotification({ open: true, message: 'Lesson added!', severity: 'success' });
@@ -268,7 +280,7 @@ const ProgramBuilder = () => {
       });
       
       // Update local state to reflect new task
-      setLocalModules(localModules.map(m => ({
+      setLocalModules(prev => prev.map(m => ({
         ...m,
         lessons: m.lessons?.map((l: any) => 
           l.id === lessonId ? { ...l, tasks: [...(l.tasks || []), newTask] } : l
@@ -284,15 +296,16 @@ const ProgramBuilder = () => {
   const handleDeleteTask = async (lessonId: string, taskId: string) => {
     try {
       await deleteTaskMutation.mutateAsync(taskId);
-      setLocalModules(localModules.map(m => ({
+      setLocalModules(prev => prev.map(m => ({
         ...m,
         lessons: m.lessons?.map((l: any) => 
           l.id === lessonId ? { ...l, tasks: l.tasks?.filter((t: any) => t.id !== taskId) } : l
         )
       })));
       setNotification({ open: true, message: 'Task removed.', severity: 'success' });
-    } catch (err) {
-      setNotification({ open: true, message: 'Failed to delete task.', severity: 'error' });
+    } catch (err: any) {
+      console.error('Task deletion failed:', err);
+      setNotification({ open: true, message: `Failed to delete task: ${err.message || 'Unknown error'}`, severity: 'error' });
     }
   };
 
@@ -315,7 +328,7 @@ const ProgramBuilder = () => {
 
       await saveTaskMutation.mutateAsync(updatedTask);
 
-      setLocalModules(localModules.map(m => ({
+      setLocalModules(prev => prev.map(m => ({
         ...m,
         lessons: m.lessons?.map((l: any) => 
           l.id === lessonId ? {
@@ -359,11 +372,11 @@ const ProgramBuilder = () => {
   };
 
   const updateModuleTitle = (moduleId: string, title: string) => {
-    setLocalModules(localModules.map(m => m.id === moduleId ? { ...m, title } : m));
+    setLocalModules(prev => prev.map(m => m.id === moduleId ? { ...m, title } : m));
   };
 
   const updateLessonTitle = (moduleId: string, lessonId: string, title: string) => {
-    setLocalModules(localModules.map(m => 
+    setLocalModules(prev => prev.map(m => 
       m.id === moduleId ? { 
         ...m, 
         lessons: m.lessons.map((l: any) => l.id === lessonId ? { ...l, title } : l) 
@@ -371,8 +384,17 @@ const ProgramBuilder = () => {
     ));
   };
 
+  const updateLessonDescription = (moduleId: string, lessonId: string, description: string) => {
+    setLocalModules(prev => prev.map(m => 
+      m.id === moduleId ? { 
+        ...m, 
+        lessons: m.lessons.map((l: any) => l.id === lessonId ? { ...l, description } : l) 
+      } : m
+    ));
+  };
+
   const updateTaskTitle = (lessonId: string, taskId: string, title: string) => {
-    setLocalModules(localModules.map(m => ({
+    setLocalModules(prev => prev.map(m => ({
       ...m,
       lessons: m.lessons?.map((l: any) => 
         l.id === lessonId ? {
@@ -712,44 +734,87 @@ const ProgramBuilder = () => {
                       {expandedModules.includes(module.id) && (
                         <Box sx={{ p: 2 }}>
                           <Stack spacing={1}>
-                            {module.lessons?.map((lesson: any, lIdx: number) => (
-                              <Box 
-                                key={lesson.id} 
-                                sx={{ 
-                                  p: 1.5, 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  gap: 2, 
-                                  borderRadius: 1.5,
-                                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                                  '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.04)' }
-                                }}
-                              >
-                                <ChevronRight size={16} color="#666" />
-                                <Typography variant="caption" sx={{ color: '#666', fontWeight: 700, minWidth: 40 }}>DAY {lesson.day_number}</Typography>
-                                <TextField 
-                                  fullWidth 
-                                  variant="standard" 
-                                  placeholder="Lesson Title" 
-                                  value={lesson.title}
-                                  onChange={(e) => updateLessonTitle(module.id, lesson.id, e.target.value)}
-                                  onBlur={() => persistLesson(lesson)}
-                                  slotProps={{
-                                    input: {
-                                      disableUnderline: true,
-                                      sx: { fontSize: '0.9rem' }
-                                    }
+                            {module.lessons?.map((lesson: any, lIdx: number) => {
+                              const isLessonExpanded = expandedLessons.includes(lesson.id);
+                              return (
+                                <Box 
+                                  key={lesson.id} 
+                                  sx={{ 
+                                    borderRadius: 1.5,
+                                    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                                    mb: 1
                                   }}
-                                />
-                                <IconButton 
-                                  size="small" 
-                                  onClick={() => handleDeleteLesson(module.id, lesson.id)}
-                                  sx={{ color: 'rgba(244, 67, 54, 0.2)', '&:hover': { color: '#f44336' } }}
                                 >
-                                  <Trash2 size={14} />
-                                </IconButton>
-                              </Box>
-                            ))}
+                                  {/* Lesson Header */}
+                                  <Box 
+                                    sx={{ 
+                                      p: 1.5, 
+                                      display: 'flex', 
+                                      alignItems: 'center', 
+                                      gap: 2 
+                                    }}
+                                  >
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={() => toggleExpandedLesson(lesson.id)}
+                                      sx={{ p: 0, color: 'rgba(255, 255, 255, 0.3)' }}
+                                    >
+                                      {isLessonExpanded ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+                                    </IconButton>
+                                    <Typography variant="caption" sx={{ color: '#666', fontWeight: 700, minWidth: 40 }}>DAY {lesson.day_number}</Typography>
+                                    <TextField 
+                                      fullWidth 
+                                      variant="standard" 
+                                      placeholder="Lesson Title" 
+                                      value={lesson.title}
+                                      onChange={(e) => updateLessonTitle(module.id, lesson.id, e.target.value)}
+                                      onBlur={() => persistLesson(lesson)}
+                                      slotProps={{
+                                        input: {
+                                          disableUnderline: true,
+                                          sx: { fontSize: '0.9rem', color: '#EAEAEA' }
+                                        }
+                                      }}
+                                    />
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={() => toggleExpandedLesson(lesson.id)}
+                                      sx={{ 
+                                        color: lesson.description ? 'var(--emerald-primary)' : 'rgba(255, 255, 255, 0.2)',
+                                        '&:hover': { color: 'var(--emerald-light)' }
+                                      }}
+                                      title="Edit Description"
+                                    >
+                                      <DescriptionIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={() => handleDeleteLesson(module.id, lesson.id)}
+                                      sx={{ color: 'rgba(244, 67, 54, 0.2)', '&:hover': { color: '#f44336' } }}
+                                    >
+                                      <Trash2 size={14} />
+                                    </IconButton>
+                                  </Box>
+
+                                  {/* Lesson Description Editor */}
+                                  {isLessonExpanded && (
+                                    <Box sx={{ px: 2, pb: 2, pt: 0.5, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                      <Typography variant="subtitle2" sx={{ mb: 1, color: '#B0B0B0', fontWeight: 700, fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <DescriptionIcon fontSize="inherit" /> LESSON DESCRIPTION (RICH TEXT)
+                                      </Typography>
+                                      <RichTextEditor
+                                        value={lesson.description || ''}
+                                        onChange={(val) => updateLessonDescription(module.id, lesson.id, val)}
+                                        onBlur={() => persistLesson(lesson)}
+                                        maxLength={1000}
+                                        placeholder="Add description or context for this day's practice..."
+                                      />
+                                    </Box>
+                                  )}
+                                </Box>
+                              );
+                            })}
                             <Button 
                               fullWidth 
                               variant="outlined" 
@@ -822,6 +887,7 @@ const ProgramBuilder = () => {
                                 <Button size="small" variant="outlined" onClick={() => handleAddTask(lesson.id, 'checklist')} startIcon={<CheckSquare size={14} />} sx={{ fontSize: '0.65rem', py: 0.5 }}>+ Checklist</Button>
                                 <Button size="small" variant="outlined" onClick={() => handleAddTask(lesson.id, 'audio')} startIcon={<Mic size={14} />} sx={{ fontSize: '0.65rem', py: 0.5 }}>+ Audio</Button>
                                 <Button size="small" variant="outlined" onClick={() => handleAddTask(lesson.id, 'video')} startIcon={<PlayCircle size={14} />} sx={{ fontSize: '0.65rem', py: 0.5 }}>+ Video</Button>
+                                <Button size="small" variant="outlined" onClick={() => handleAddTask(lesson.id, 'text')} startIcon={<MessageSquare size={14} />} sx={{ fontSize: '0.65rem', py: 0.5 }}>+ Text</Button>
                               </Box>
                             </Box>
                             
@@ -890,8 +956,16 @@ const ProgramBuilder = () => {
                                       </IconButton>
                                     )}
 
-                                    <IconButton size="small" onClick={() => handleDeleteTask(lesson.id, task.id)} sx={{ color: 'rgba(244, 67, 54, 0.3)', '&:hover': { color: '#f44336' } }}>
-                                      <Trash2 size={14} />
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={() => handleDeleteTask(lesson.id, task.id)} 
+                                      sx={{ 
+                                        color: 'rgba(244, 67, 54, 0.6)', 
+                                        '&:hover': { color: '#f44336', backgroundColor: 'rgba(244, 67, 54, 0.1)' } 
+                                      }}
+                                      title="Delete Task"
+                                    >
+                                      <Trash2 size={16} />
                                     </IconButton>
                                   </Stack>
                                 </Box>

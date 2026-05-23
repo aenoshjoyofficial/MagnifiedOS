@@ -1,5 +1,10 @@
--- Function to Save/Update a complete program structure in one transaction
--- This handles Program Settings, Modules, and Lessons (including deletions)
+-- MAGNIFIED EXISTENCE OS - ADD LESSON DESCRIPTION
+-- Run this in your Supabase SQL Editor
+
+-- 1. Add description column to lessons table
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS description TEXT;
+
+-- 2. Update publish_complete_program RPC function to handle lesson descriptions
 CREATE OR REPLACE FUNCTION publish_complete_program(
     p_program_id UUID,
     p_program_data JSONB,

@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS lessons (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   module_id UUID REFERENCES modules(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
+  description TEXT,
   day_number INTEGER NOT NULL,
   unlock_day INTEGER NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()

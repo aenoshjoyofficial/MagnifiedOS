@@ -26,6 +26,7 @@ CREATE TABLE lessons (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   module_id UUID REFERENCES modules(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
+  description TEXT,
   day_number INTEGER NOT NULL,
   unlock_day INTEGER NOT NULL, -- Relative to program start date
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
