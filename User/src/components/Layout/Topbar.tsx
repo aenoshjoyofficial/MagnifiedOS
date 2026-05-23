@@ -9,7 +9,8 @@ import {
   ListItemIcon, 
   Divider,
   Badge,
-  useTheme
+  useTheme,
+  Button
 } from '@mui/material';
 import { 
   Bell, 
@@ -21,6 +22,7 @@ import {
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/useStore';
+import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '@/lib/queries';
 
 const Topbar = () => {
   const location = useLocation();
@@ -29,7 +31,13 @@ const Topbar = () => {
   const theme = useTheme();
   const { user, signOut } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [notiAnchorEl, setNotiAnchorEl] = useState<null | HTMLElement>(null);
   const [profile, setProfile] = useState<any>(null);
+
+  const targetUserId = profile?.id || user?.id || '';
+  const { data: notifications = [] } = useNotifications(targetUserId);
+  const markReadMutation = useMarkNotificationRead();
+  const markAllReadMutation = useMarkAllNotificationsRead();
 
   const handleLogout = async () => {
     handleClose();
@@ -95,11 +103,111 @@ const Topbar = () => {
       </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <IconButton sx={{ color: '#B0B0B0', '&:hover': { color: '#D4AF37' } }}>
-          <Badge badgeContent={3} color="primary" sx={{ '& .MuiBadge-badge': { backgroundColor: '#D4AF37', color: '#0B0B0F' } }}>
+        <IconButton 
+          onClick={(e) => setNotiAnchorEl(e.currentTarget)} 
+          sx={{ color: '#B0B0B0', '&:hover': { color: '#D4AF37' } }}
+        >
+          <Badge 
+            badgeContent={notifications.filter((n: any) => !n.is_read).length} 
+            color="primary" 
+            sx={{ '& .MuiBadge-badge': { backgroundColor: '#D4AF37', color: '#0B0B0F' } }}
+          >
             <Bell size={20} />
           </Badge>
         </IconButton>
+
+        <Menu
+          anchorEl={notiAnchorEl}
+          open={Boolean(notiAnchorEl)}
+          onClose={() => setNotiAnchorEl(null)}
+          slotProps={{
+            paper: {
+              sx: {
+                mt: 1.5,
+                width: 320,
+                maxHeight: 480,
+                backgroundColor: '#121217',
+                border: '1px solid rgba(212, 175, 55, 0.1)',
+                display: 'flex',
+                flexDirection: 'column',
+              }
+            }
+          }}
+          transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+          anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+        >
+          <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+            <Typography variant="subtitle1" sx={{ color: '#EAEAEA', fontWeight: 800 }}>
+              Notifications
+            </Typography>
+            {notifications.some((n: any) => !n.is_read) && (
+              <Button 
+                size="small" 
+                onClick={async () => {
+                  if (targetUserId) {
+                    await markAllReadMutation.mutateAsync(targetUserId);
+                  }
+                }}
+                sx={{ 
+                  color: '#D4AF37', 
+                  fontSize: '0.75rem', 
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  p: 0,
+                  minWidth: 0,
+                  '&:hover': { backgroundColor: 'transparent', textDecoration: 'underline' }
+                }}
+              >
+                Mark all as read
+              </Button>
+            )}
+          </Box>
+          <Box sx={{ overflowY: 'auto', flex: 1, py: 1 }}>
+            {notifications.length === 0 ? (
+              <Box sx={{ p: 4, textAlign: 'center' }}>
+                <Typography variant="body2" sx={{ color: '#666' }}>
+                  No notifications yet
+                </Typography>
+              </Box>
+            ) : (
+              notifications.map((n: any) => (
+                <MenuItem 
+                  key={n.id}
+                  onClick={async () => {
+                    if (!n.is_read && targetUserId) {
+                      await markReadMutation.mutateAsync({ userId: targetUserId, notificationId: n.id });
+                    }
+                  }}
+                  sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'flex-start',
+                    gap: 0.5,
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.02)',
+                    backgroundColor: n.is_read ? 'transparent' : 'rgba(212, 175, 55, 0.03)',
+                    '&:hover': { backgroundColor: 'rgba(212, 175, 55, 0.05)' },
+                    whiteSpace: 'normal'
+                  }}
+                >
+                  <Box sx={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                    <Typography variant="body2" sx={{ color: n.is_read ? '#B0B0B0' : '#EAEAEA', fontWeight: n.is_read ? 500 : 700, fontSize: '0.85rem' }}>
+                      {n.title}
+                    </Typography>
+                    {!n.is_read && (
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#D4AF37', mt: 0.5, flexShrink: 0 }} />
+                    )}
+                  </Box>
+                  <Typography variant="caption" sx={{ color: '#888', display: 'block', mb: 0.5, whiteSpace: 'normal', lineHeight: 1.3, textAlign: 'left' }}>
+                    {n.message}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#555', fontSize: '0.7rem' }}>
+                    {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(n.created_at).toLocaleDateString()}
+                  </Typography>
+                </MenuItem>
+              ))
+            )}
+          </Box>
+        </Menu>
 
         <Box 
           onClick={handleMenu}

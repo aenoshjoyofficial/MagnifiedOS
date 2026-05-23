@@ -92,7 +92,7 @@ const AdminLogin = () => {
             ADMIN <span style={{ color: '#D4AF37' }}>OS</span>
           </Typography>
           <Typography variant="body2" sx={{ color: '#B0B0B0' }}>
-            Magnified Existence Administrative Portal
+            Shribodhi Magnified Existence Administrative Portal
           </Typography>
         </Box>
 
@@ -159,7 +159,7 @@ const AdminLogin = () => {
         </form>
 
         <Typography variant="caption" sx={{ display: 'block', mt: 4, color: '#444', fontWeight: 600 }}>
-          SECURE ENCRYPTED SESSION • MAGNIFIED EXISTENCE
+          SECURE ENCRYPTED SESSION • SHRIBODHI MAGNIFIED EXISTENCE
         </Typography>
       </Paper>
     </Box>

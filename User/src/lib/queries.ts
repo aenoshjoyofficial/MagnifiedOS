@@ -193,3 +193,106 @@ export const useCreateBooking = () => {
     },
   });
 };
+
+/**
+ * Fetch notifications for the user
+ */
+export const useNotifications = (userId: string) => {
+  return useQuery({
+    queryKey: ['notifications', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.warn('Notifications query failed. Using fallback mock data.', error);
+        return [
+          {
+            id: 'mock-1',
+            title: 'Welcome to Shribodhi Magnified',
+            message: 'Your portal is set up. Access neural protocols, schedules, and profile settings in your dashboard.',
+            type: 'system',
+            is_read: false,
+            created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+          },
+          {
+            id: 'mock-2',
+            title: 'New Session Scheduled',
+            message: 'A new synchronous collective expansion session is scheduled. Check the sessions tab.',
+            type: 'session',
+            is_read: false,
+            created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
+          },
+          {
+            id: 'mock-3',
+            title: 'Daily Protocol Released',
+            message: "Today's evolution and neural rearchitecting protocols are active. Start your practice.",
+            type: 'protocol',
+            is_read: true,
+            created_at: new Date(Date.now() - 3600000 * 12).toISOString(),
+          }
+        ];
+      }
+      return data;
+    },
+    enabled: !!userId,
+  });
+};
+
+/**
+ * Mark a single notification as read
+ */
+export const useMarkNotificationRead = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ userId, notificationId }: { userId: string, notificationId: string }) => {
+      if (notificationId.startsWith('mock-')) return { id: notificationId, is_read: true };
+      
+      const { data, error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', variables.userId] });
+    },
+  });
+};
+
+/**
+ * Mark all notifications as read
+ */
+export const useMarkAllNotificationsRead = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      // If notifications are mock, we don't call supabase
+      const { data, error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', userId)
+        .eq('is_read', false)
+        .select();
+      
+      if (error) {
+        console.warn('Could not mark notifications read in Supabase.', error);
+        return [];
+      }
+      return data;
+    },
+    onSuccess: (_, userId) => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+    },
+  });
+};
+

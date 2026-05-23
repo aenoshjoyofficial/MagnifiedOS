@@ -37,6 +37,51 @@ const Profile = () => {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const [passwordData, setPasswordData] = useState({
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  const handlePasswordChange = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(false);
+
+    if (!passwordData.newPassword || !passwordData.confirmPassword) {
+      setPasswordError('Both fields are required.');
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordError('Passwords do not match.');
+      return;
+    }
+
+    try {
+      setIsUpdatingPassword(true);
+      const { error } = await supabase.auth.updateUser({
+        password: passwordData.newPassword
+      });
+
+      if (error) throw error;
+
+      setPasswordSuccess(true);
+      setPasswordData({ newPassword: '', confirmPassword: '' });
+    } catch (err: any) {
+      console.error('Password change error:', err);
+      setPasswordError(err.message || 'Failed to update password.');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   React.useEffect(() => {
     const findUserId = async () => {
       if (user?.id) {
@@ -249,6 +294,50 @@ const Profile = () => {
                   sx={{ backgroundColor: 'var(--emerald-primary)', color: '#0B0B0F', fontWeight: 700, px: 4 }}
                 >
                   {updateProfileMutation.isPending ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </Box>
+            </Stack>
+
+            <Divider sx={{ my: 4, opacity: 0.05 }} />
+
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 3 }}>Security & Password</Typography>
+            {passwordError && (
+              <Alert severity="error" sx={{ mb: 3, backgroundColor: 'rgba(244, 67, 54, 0.1)', color: '#f44336' }}>
+                {passwordError}
+              </Alert>
+            )}
+            {passwordSuccess && (
+              <Alert severity="success" sx={{ mb: 3, backgroundColor: 'rgba(76, 175, 80, 0.1)', color: '#4CAF50' }}>
+                Password updated successfully!
+              </Alert>
+            )}
+            <Stack spacing={3}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1, color: '#B0B0B0', fontWeight: 700 }}>NEW PASSWORD</Typography>
+                <TextField 
+                  fullWidth 
+                  type="password"
+                  value={passwordData.newPassword}
+                  onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
+                />
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1, color: '#B0B0B0', fontWeight: 700 }}>CONFIRM NEW PASSWORD</Typography>
+                <TextField 
+                  fullWidth 
+                  type="password"
+                  value={passwordData.confirmPassword}
+                  onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
+                />
+              </Box>
+              <Box sx={{ pt: 2 }}>
+                <Button 
+                  variant="contained" 
+                  onClick={handlePasswordChange}
+                  disabled={isUpdatingPassword}
+                  sx={{ backgroundColor: 'var(--emerald-primary)', color: '#0B0B0F', fontWeight: 700, px: 4 }}
+                >
+                  {isUpdatingPassword ? 'Updating...' : 'Update Password'}
                 </Button>
               </Box>
             </Stack>

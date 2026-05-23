@@ -49,7 +49,7 @@ const MemberLogin = () => {
         .single();
 
       if (profile?.role !== 'member' && profile?.role !== 'admin') {
-        throw new Error('Access restricted to Magnified members.');
+        throw new Error('Access restricted to Shribodhi Magnified members.');
       }
 
       // If we reach here, they are authorized
@@ -170,7 +170,7 @@ const MemberLogin = () => {
         </form>
 
         <Typography variant="caption" sx={{ display: 'block', mt: 4, color: '#444', fontWeight: 600 }}>
-          MAGNIFIED EXISTENCE MEMBER PORTAL
+          SHRIBODHI MAGNIFIED EXISTENCE MEMBER PORTAL
         </Typography>
       </Paper>
     </Box>

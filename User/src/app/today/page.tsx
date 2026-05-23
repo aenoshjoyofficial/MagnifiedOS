@@ -79,6 +79,18 @@ const TodayPractice = () => {
   const completedTasks = tasks.filter((t: any) => completions.some((c: any) => c.task_id === t.id));
   const isDayComplete = completedTasks.length === tasks.length && tasks.length > 0;
 
+  const [hasLoadedInitial, setHasLoadedInitial] = React.useState(false);
+  const [isDaySubmitted, setIsDaySubmitted] = React.useState(false);
+
+  React.useEffect(() => {
+    if (enrollment && !hasLoadedInitial) {
+      if (isDayComplete) {
+        setIsDaySubmitted(true);
+      }
+      setHasLoadedInitial(true);
+    }
+  }, [enrollment, isDayComplete, hasLoadedInitial]);
+
   const handleTaskComplete = async (taskId: string) => {
     if (completions.some((c: any) => c.task_id === taskId)) return;
     
@@ -160,7 +172,7 @@ const TodayPractice = () => {
 
       {/* Global Actions */}
       <Box sx={{ textAlign: 'center' }}>
-        {isDayComplete ? (
+        {isDaySubmitted ? (
           <Box sx={{ p: 4, borderRadius: 4, backgroundColor: 'rgba(76, 175, 80, 0.05)', border: '1px solid rgba(76, 175, 80, 0.2)' }}>
             <Trophy size={48} color="#4CAF50" style={{ marginBottom: 16 }} />
             <Typography variant="h5" sx={{ fontWeight: 800, color: '#4CAF50', mb: 1 }}>Day Complete!</Typography>
@@ -172,7 +184,8 @@ const TodayPractice = () => {
         ) : (
           <Button 
             variant="contained" 
-            disabled={true}
+            disabled={!isDayComplete}
+            onClick={() => setIsDaySubmitted(true)}
             sx={{ 
               backgroundColor: '#D4AF37', 
               color: '#0B0B0F',
@@ -181,7 +194,10 @@ const TodayPractice = () => {
               fontSize: '1.1rem',
               fontWeight: 800,
               borderRadius: 10,
-              boxShadow: '0 8px 32px rgba(212, 175, 55, 0.2)',
+              boxShadow: isDayComplete ? '0 8px 32px rgba(212, 175, 55, 0.2)' : 'none',
+              '&:hover': {
+                backgroundColor: '#B8962D',
+              },
               '&.Mui-disabled': { backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'rgba(255, 255, 255, 0.2)' }
             }}
           >
@@ -255,10 +271,41 @@ const TaskCard = ({ task, index, isCompleted, onComplete }: { task: any, index: 
             </Typography>
           </Box>
         </Box>
-        <Box sx={{ textAlign: 'right' }}>
-          <Typography variant="body2" sx={{ color: '#B0B0B0', fontWeight: 500 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }} onClick={(e) => e.stopPropagation()}>
+          <Typography variant="body2" sx={{ color: '#B0B0B0', fontWeight: 500, mr: 1 }}>
             {task.content?.duration || '5 min'}
           </Typography>
+          {!isLocked && (
+            <Button
+              variant={isCompleted ? "text" : "outlined"}
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                onComplete();
+              }}
+              disabled={isCompleted}
+              startIcon={isCompleted ? <CheckCircle2 size={16} /> : null}
+              sx={{
+                minWidth: '90px',
+                borderColor: isCompleted ? 'transparent' : 'rgba(212, 175, 55, 0.3)',
+                color: isCompleted ? '#4CAF50' : '#D4AF37',
+                fontWeight: 700,
+                fontSize: '0.75rem',
+                borderRadius: '20px',
+                textTransform: 'none',
+                '&:hover': {
+                  borderColor: '#D4AF37',
+                  backgroundColor: 'rgba(212, 175, 55, 0.05)',
+                },
+                '&.Mui-disabled': {
+                  color: '#4CAF50',
+                  borderColor: 'transparent',
+                }
+              }}
+            >
+              {isCompleted ? 'Done' : 'Mark Done'}
+            </Button>
+          )}
         </Box>
       </Box>
 
