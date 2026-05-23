@@ -27,9 +27,21 @@ import {
   Lock,
   LogOut
 } from 'lucide-react';
-
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/store/useStore';
 const Settings = () => {
+  const navigate = useNavigate();
+  const { signOut } = useAuthStore();
   const [success, setSuccess] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (err) {
+      console.error('Error logging out:', err);
+    }
+  };
   const [settings, setSettings] = useState({
     pushNotifications: true,
     emailUpdates: true,
@@ -167,6 +179,7 @@ const Settings = () => {
           <Button 
             variant="outlined" 
             color="error" 
+            onClick={handleLogout}
             startIcon={<LogOut size={18} />}
             sx={{ px: 4 }}
           >

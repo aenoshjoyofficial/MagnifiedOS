@@ -18,17 +18,28 @@ import {
   LogOut,
   ChevronDown
 } from 'lucide-react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/useStore';
 
 const Topbar = () => {
   const location = useLocation();
   const pathname = location.pathname;
+  const navigate = useNavigate();
   const theme = useTheme();
-  const { user } = useAuthStore();
+  const { user, signOut } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [profile, setProfile] = useState<any>(null);
+
+  const handleLogout = async () => {
+    handleClose();
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (err) {
+      console.error('Error logging out:', err);
+    }
+  };
 
   React.useEffect(() => {
     const fetchProfile = async () => {
@@ -162,7 +173,7 @@ const Topbar = () => {
             Settings
           </MenuItem>
           <Divider sx={{ my: 1, opacity: 0.1, backgroundColor: '#D4AF37' }} />
-          <MenuItem onClick={handleClose} sx={{ color: '#FF4B4B !important' }}>
+          <MenuItem onClick={handleLogout} sx={{ color: '#FF4B4B !important' }}>
             <ListItemIcon sx={{ color: '#FF4B4B', minWidth: 35 }}>
               <LogOut size={18} />
             </ListItemIcon>

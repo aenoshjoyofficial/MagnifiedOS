@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Box, 
   Drawer, 
@@ -26,7 +26,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { useUIStore } from '@/store/useStore';
+import { useUIStore, useAuthStore } from '@/store/useStore';
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -40,7 +40,18 @@ const navItems = [
 const Sidebar = () => {
   const location = useLocation();
   const pathname = location.pathname;
+  const navigate = useNavigate();
   const { isSidebarOpen, toggleSidebar } = useUIStore();
+  const { signOut } = useAuthStore();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (err) {
+      console.error('Error logging out:', err);
+    }
+  };
 
   const drawerWidth = isSidebarOpen ? 260 : 80;
 
@@ -134,6 +145,7 @@ const Sidebar = () => {
         <Divider sx={{ mb: 2, opacity: 0.1, backgroundColor: '#D4AF37' }} />
         <ListItem disablePadding sx={{ display: 'block' }}>
           <ListItemButton
+            onClick={handleLogout}
             sx={{
               minHeight: 48,
               justifyContent: isSidebarOpen ? 'initial' : 'center',
