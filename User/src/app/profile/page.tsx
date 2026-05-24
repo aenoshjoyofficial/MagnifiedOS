@@ -348,7 +348,7 @@ const Profile = () => {
             <Grid container spacing={2}>
               <Grid size={{ xs: 6, sm: 4 }}>
                 <Box sx={{ p: 2, borderRadius: 2, backgroundColor: 'rgba(255, 255, 255, 0.02)', textAlign: 'center' }}>
-                  <Typography variant="h6" sx={{ fontWeight: 800 }}>{new Date(profile?.created_at).toLocaleDateString()}</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800 }}>{profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'N/A'}</Typography>
                   <Typography variant="caption" sx={{ color: '#666' }}>Joined Date</Typography>
                 </Box>
               </Grid>

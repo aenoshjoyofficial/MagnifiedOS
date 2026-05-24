@@ -7,16 +7,18 @@ import {
   LinearProgress, 
   Button,
   Stack,
-  CircularProgress
+  CircularProgress,
+  IconButton
 } from '@mui/material';
 import { 
   ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   Lock,
   PlayCircle,
   Trophy
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import AudioTask from '@/components/Tasks/AudioTask';
 import VideoTask from '@/components/Tasks/VideoTask';
 import TextTask from '@/components/Tasks/TextTask';
@@ -72,24 +74,72 @@ const TodayPractice = () => {
     }));
   };
 
-  React.useEffect(() => {
-    if (enrollment && !hasLoadedInitial) {
-      const program = enrollment.programs;
-      const startedAt = new Date(enrollment.started_at);
-      const daysSinceStart = Math.max(1, Math.floor((new Date().getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-      const allLessons = program.modules.flatMap((m: any) => m.lessons);
-      const currentLesson = allLessons[daysSinceStart - 1] || allLessons[allLessons.length - 1];
-      const tasks = currentLesson?.tasks || [];
-      const completions = enrollment.task_completions || [];
-      const completedTasks = tasks.filter((t: any) => completions.some((c: any) => c.task_id === t.id));
-      const isDayComplete = completedTasks.length === tasks.length && tasks.length > 0;
+  const [searchParams] = useSearchParams();
+  const dayParam = searchParams.get('day');
 
-      if (isDayComplete) {
-        setIsDaySubmitted(true);
+  const program = enrollment?.programs;
+  const startedAt = enrollment ? new Date(enrollment.started_at) : new Date();
+  const daysSinceStart = enrollment ? Math.max(1, Math.floor((new Date().getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24)) + 1) : 1;
+  const viewedDay = dayParam ? parseInt(dayParam, 10) : daysSinceStart;
+
+  const allLessons = React.useMemo(() => {
+    return program?.modules?.flatMap((m: any) => m.lessons || []) || [];
+  }, [program]);
+
+  const currentLesson = React.useMemo(() => {
+    if (allLessons.length === 0) return null;
+    return allLessons.find((l: any) => l.day_number === viewedDay) || allLessons.find((l: any) => l.day_number === 1) || allLessons[allLessons.length - 1];
+  }, [allLessons, viewedDay]);
+
+  const tasks = currentLesson?.tasks || [];
+  const completions = enrollment?.task_completions || [];
+
+  const { completedTasks, isDayComplete, completedKeys } = React.useMemo(() => {
+    const taskMap: Record<string, { title: string; dayNumber: number }> = {};
+    program?.modules?.forEach((mod: any) => {
+      mod.lessons?.forEach((les: any) => {
+        les.tasks?.forEach((task: any) => {
+          taskMap[task.id] = { title: task.title, dayNumber: les.day_number };
+        });
+      });
+    });
+
+    const keys = new Set<string>();
+    completions.forEach((c: any) => {
+      const tInfo = taskMap[c.task_id];
+      if (tInfo) {
+        keys.add(`${tInfo.dayNumber}_${tInfo.title}`);
       }
+    });
+
+    const list = tasks.filter((t: any) => keys.has(`${viewedDay}_${t.title}`));
+    const complete = list.length === tasks.length && tasks.length > 0;
+    
+    return {
+      completedTasks: list,
+      isDayComplete: complete,
+      completedKeys: keys
+    };
+  }, [program, completions, tasks, viewedDay]);
+
+  React.useEffect(() => {
+    if (enrollment) {
+      setIsDaySubmitted(isDayComplete);
       setHasLoadedInitial(true);
     }
-  }, [enrollment, hasLoadedInitial]);
+  }, [enrollment, viewedDay, isDayComplete]);
+
+  const handleTaskComplete = async (taskId: string) => {
+    if (!enrollment) return;
+    const task = tasks.find((t: any) => t.id === taskId);
+    if (!task) return;
+    if (completedKeys.has(`${viewedDay}_${task.title}`)) return;
+    
+    await completeTaskMutation.mutateAsync({
+      enrollmentId: enrollment.id,
+      taskId: taskId
+    });
+  };
 
   if (isLoading) {
     return (
@@ -107,29 +157,6 @@ const TodayPractice = () => {
       </Box>
     );
   }
-
-  const program = enrollment.programs;
-  const startedAt = new Date(enrollment.started_at);
-  const daysSinceStart = Math.max(1, Math.floor((new Date().getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-  
-  // Flatten all lessons and find the one for the current day
-  const allLessons = program.modules.flatMap((m: any) => m.lessons);
-  
-  const currentLesson = allLessons[daysSinceStart - 1] || allLessons[allLessons.length - 1];
-  const tasks = currentLesson?.tasks || [];
-  const completions = enrollment.task_completions || [];
-  
-  const completedTasks = tasks.filter((t: any) => completions.some((c: any) => c.task_id === t.id));
-  const isDayComplete = completedTasks.length === tasks.length && tasks.length > 0;
-
-  const handleTaskComplete = async (taskId: string) => {
-    if (completions.some((c: any) => c.task_id === taskId)) return;
-    
-    await completeTaskMutation.mutateAsync({
-      enrollmentId: enrollment.id,
-      taskId: taskId
-    });
-  };
 
   const parsedRoutine = parseRoutineFromHtml(currentLesson?.description || '');
   
@@ -164,11 +191,31 @@ const TodayPractice = () => {
         </Box>
 
         <Typography variant="overline" sx={{ color: '#D4AF37', fontWeight: 700, letterSpacing: 2 }}>
-          DAY {daysSinceStart} • {currentLesson?.title?.toUpperCase() || 'PRACTICE'}
+          DAY {viewedDay} • {currentLesson?.title?.toUpperCase() || 'PRACTICE'}
         </Typography>
-        <Typography variant="h3" sx={{ fontWeight: 800, mt: 0.5, mb: 3 }}>
-          {currentLesson?.title || 'Daily Integration'}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 0.5, mb: 3 }}>
+          <Typography variant="h3" sx={{ fontWeight: 800, flexGrow: 1 }}>
+            {currentLesson?.title || 'Daily Integration'}
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <IconButton 
+              disabled={viewedDay <= 1}
+              component={Link}
+              to={`/today?day=${viewedDay - 1}`}
+              sx={{ color: '#D4AF37', '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.05)' } }}
+            >
+              <ChevronLeft size={20} />
+            </IconButton>
+            <IconButton 
+              disabled={viewedDay >= daysSinceStart}
+              component={Link}
+              to={`/today?day=${viewedDay + 1}`}
+              sx={{ color: '#D4AF37', '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.05)' } }}
+            >
+              <ChevronRight size={20} />
+            </IconButton>
+          </Box>
+        </Box>
 
         {/* Daily Progress (Moved to Top) */}
         <Box sx={{ p: 2.5, borderRadius: 3, backgroundColor: 'rgba(212, 175, 55, 0.05)', border: '1px solid rgba(212, 175, 55, 0.1)' }}>
@@ -273,7 +320,7 @@ const TodayPractice = () => {
                           key={task.id} 
                           task={task} 
                           index={globalIndex} 
-                          isCompleted={completions.some((c: any) => c.task_id === task.id)}
+                          isCompleted={completedKeys.has(`${viewedDay}_${task.title}`)}
                           onComplete={() => handleTaskComplete(task.id)} 
                         />
                       );
@@ -307,7 +354,7 @@ const TodayPractice = () => {
                       key={task.id} 
                       task={task} 
                       index={globalIndex} 
-                      isCompleted={completions.some((c: any) => c.task_id === task.id)}
+                      isCompleted={completedKeys.has(`${viewedDay}_${task.title}`)}
                       onComplete={() => handleTaskComplete(task.id)} 
                     />
                   );
@@ -339,7 +386,7 @@ const TodayPractice = () => {
                 key={task.id} 
                 task={task} 
                 index={index} 
-                isCompleted={completions.some((c: any) => c.task_id === task.id)}
+                isCompleted={completedKeys.has(`${viewedDay}_${task.title}`)}
                 onComplete={() => handleTaskComplete(task.id)} 
               />
             ))}

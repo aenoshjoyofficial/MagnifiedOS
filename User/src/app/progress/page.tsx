@@ -87,17 +87,45 @@ const Progress = () => {
     return streak;
   };
 
-  const totalTasks = program?.modules?.reduce((acc: number, mod: any) => 
-    acc + mod.lessons.reduce((lAcc: number, lesson: any) => lAcc + lesson.tasks.length, 0), 0) || 60;
+  const { totalTasks, completedCount, completedKeys } = React.useMemo(() => {
+    const taskMap: Record<string, { title: string; dayNumber: number }> = {};
+    const allTaskKeys = new Set<string>();
+    
+    program?.modules?.forEach((mod: any) => {
+      mod.lessons?.forEach((les: any) => {
+        les.tasks?.forEach((task: any) => {
+          taskMap[task.id] = {
+            title: task.title,
+            dayNumber: les.day_number
+          };
+          allTaskKeys.add(`${les.day_number}_${task.title}`);
+        });
+      });
+    });
+    
+    const completedKeys = new Set<string>();
+    completions.forEach((c: any) => {
+      const tInfo = taskMap[c.task_id];
+      if (tInfo) {
+        completedKeys.add(`${tInfo.dayNumber}_${tInfo.title}`);
+      }
+    });
+    
+    return {
+      totalTasks: allTaskKeys.size || 60,
+      completedCount: completedKeys.size,
+      completedKeys
+    };
+  }, [program, completions]);
   
-  const progressPercent = Math.round((completions.length / totalTasks) * 100);
+  const progressPercent = Math.round((completedCount / totalTasks) * 100);
   const currentStreak = calculateStreak();
 
   const stats = [
-    { label: 'Total Completions', value: completions.length, icon: CheckCircle2, color: '#4CAF50' },
+    { label: 'Total Completions', value: completedCount, icon: CheckCircle2, color: '#4CAF50' },
     { label: 'Current Streak', value: `${currentStreak} ${currentStreak === 1 ? 'Day' : 'Days'}`, icon: Zap, color: '#FF9800' },
     { label: 'Neural Expansion', value: `${progressPercent}%`, icon: TrendingUp, color: '#D4AF37' },
-    { label: 'Milestones', value: Math.floor(completions.length / 10), icon: Award, color: '#2196F3' },
+    { label: 'Milestones', value: Math.floor(completedCount / 10), icon: Award, color: '#2196F3' },
   ];
 
   return (
@@ -138,8 +166,11 @@ const Progress = () => {
             <Typography variant="h6" sx={{ fontWeight: 800, mb: 3 }}>Module Breakdown</Typography>
             <Stack spacing={4}>
               {program?.modules?.map((module: any) => {
-                const modTasks = module.lessons.flatMap((l: any) => l.tasks);
-                const modCompletions = modTasks.filter((t: any) => completions.some((c: any) => c.task_id === t.id));
+                const modTasks = module.lessons?.flatMap((l: any) => l.tasks || []) || [];
+                const modCompletions = modTasks.filter((t: any) => {
+                  const lesson = module.lessons.find((l: any) => l.tasks?.some((tk: any) => tk.id === t.id));
+                  return completedKeys.has(`${lesson?.day_number || 1}_${t.title}`);
+                });
                 const modPercent = modTasks.length > 0 ? Math.round((modCompletions.length / modTasks.length) * 100) : 0;
 
                 return (

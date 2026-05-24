@@ -16,14 +16,19 @@ import {
   Divider,
   Grid,
   CircularProgress,
+  LinearProgress,
   Alert,
-  Snackbar
+  Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import RichTextEditor from '@/components/RichTextEditor';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { 
   Save, 
   Plus, 
@@ -39,7 +44,13 @@ import {
   PlayCircle,
   Mic,
   Upload,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Cpu,
+  FolderOpen,
+  Users,
+  FileText,
+  Award,
+  UserCheck
 } from 'lucide-react';
 import { 
   useSaveProgram, 
@@ -52,42 +63,26 @@ import {
   useUploadAsset,
   useDeleteModule,
   useDeleteLesson,
-  useDeleteProgram
+  useDeleteProgram,
+  useUsers,
+  useEnrollUser
 } from '@/lib/queries';
-
-const generateRoutineHtml = (routine: Array<{ window: string, system: string, anchor: string, instruction: string }>) => {
-  let cardsHtml = '';
-  routine.forEach(item => {
-    let instructionHtml = '';
-    if (item.instruction) {
-      instructionHtml = `
-      <div style="margin-top:12px; padding-top:12px; border-top:1px dashed rgba(212,175,55,0.15); color:#EAEAEA; font-size:0.85rem; line-height:1.5; text-align:left;">
-        <div style="color:#D4AF37; font-weight:700; font-size:0.75rem; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px;">Process Instructions:</div>
-        <div class="routine-instruction-content">${item.instruction}</div>
-      </div>`;
-    }
-
-    cardsHtml += `
-    <div style="background:rgba(212,175,55,0.02); border:1px solid rgba(212,175,55,0.08); border-radius:12px; padding:16px; margin-bottom:12px; display:flex; flex-direction:column; gap:8px;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span style="color:#D4AF37; font-weight:800; font-size:0.75rem; letter-spacing:1px; text-transform:uppercase;">${item.window}</span>
-        <span style="color:#666; font-size:0.75rem; font-weight:600;">Routine Window</span>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
-        <div style="color:#EAEAEA; font-weight:700; font-size:1rem;">${item.system}</div>
-        <div style="color:#B0B0B0; font-size:0.85rem; line-height:1.4;">${item.anchor}</div>
-      </div>
-      ${instructionHtml}
-    </div>`;
-  });
-
-  const jsonStr = JSON.stringify(routine);
-  return `
-  <div class="day-routine-container" style="margin-top:16px; margin-bottom:16px;">
-    ${cardsHtml}
-    <script type="application/json" id="routine-json">${jsonStr}</script>
-  </div>`;
-};
+import { 
+  DEFAULT_CHAMBER_SCRIPTS,
+  CHAMBERS_INFO,
+  WEEK_THEMES,
+  CHAMBER_KEYS,
+  getChamberScriptForProgram,
+  getChamberDayTitlesForProgram,
+  getCombinedStepsForDay,
+  getChamberWindow,
+  generateRoutineHtml,
+  ChamberScript,
+  ChamberStep,
+  getDayOfWeekLabel,
+  getDayTheme,
+  matchChamberKey
+} from '@/lib/chambersData';
 
 const parseRoutineFromHtml = (html: string) => {
   try {
@@ -186,7 +181,7 @@ const ProgramBuilder = () => {
 
   // Sync data when switching programs
   useEffect(() => {
-    if (programDetails) {
+    if (programId && programDetails) {
       setProgramData({
         title: programDetails.title || '',
         description: programDetails.description || '',
@@ -195,6 +190,15 @@ const ProgramBuilder = () => {
         is_published: programDetails.is_published || false
       });
       setLocalModules(programDetails.modules || []);
+    } else {
+      setProgramData({
+        title: '',
+        description: '',
+        duration_days: 30,
+        cover_image: '',
+        is_published: false
+      });
+      setLocalModules([]);
     }
   }, [programId, programDetails]); // Only sync when programId changes or details first load
 
@@ -451,6 +455,551 @@ const ProgramBuilder = () => {
     ));
   };
 
+  const updateLessonDayNumber = (moduleId: string, lessonId: string, dayNumber: number) => {
+    setLocalModules(prev => prev.map(m => 
+      m.id === moduleId ? { 
+        ...m, 
+        lessons: m.lessons.map((l: any) => l.id === lessonId ? { ...l, day_number: dayNumber, unlock_day: dayNumber } : l) 
+      } : m
+    ));
+  };
+
+  const [hasSyncedTasks, setHasSyncedTasks] = useState(false);
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [initProgress, setInitProgress] = useState(0);
+  const [initStatusText, setInitStatusText] = useState('');
+
+  const handleSyncAll = async () => {
+    if (!programId || !localModules || localModules.length === 0) return;
+    
+    setIsSyncingAll(true);
+    setSyncProgress(0);
+    try {
+      let totalLessons = 0;
+      localModules.forEach(m => {
+        totalLessons += (m.lessons || []).length;
+      });
+
+      if (totalLessons === 0) {
+        setNotification({ open: true, message: 'No lessons found to sync.', severity: 'error' });
+        setIsSyncingAll(false);
+        return;
+      }
+
+      let processed = 0;
+      const newModules = JSON.parse(JSON.stringify(localModules));
+
+      for (let mIdx = 0; mIdx < newModules.length; mIdx++) {
+        const module = newModules[mIdx];
+        const moduleChamberKey = matchChamberKey(module.title);
+        
+        if (!moduleChamberKey) continue;
+
+        for (let lIdx = 0; lIdx < (module.lessons || []).length; lIdx++) {
+          const lesson = module.lessons[lIdx];
+          const dayNum = lesson.day_number || 1;
+
+          // 1. Sync Routine Description
+          const formatStepsHtml = (s: ChamberScript) => {
+            let html = `<strong>When:</strong> ${s.when || 'Varies'} | <strong>Duration:</strong> ${s.duration || 'Varies'}<br/><br/>`;
+            if (s.steps && s.steps.length > 0) {
+              html += '<strong>Steps:</strong><ul>';
+              s.steps.forEach((step: ChamberStep) => {
+                let assetLink = '';
+                if (step.contentUrl) {
+                  assetLink = ` (<a href="${step.contentUrl}" target="_blank" style="color:#D4AF37;text-decoration:underline;">View Asset</a>)`;
+                }
+                html += `<li>[${step.type.toUpperCase()}] ${step.title}${assetLink}</li>`;
+              });
+              html += '</ul>';
+            }
+            if (s.directive) {
+              html += `<br/><strong>DIRECTIVE:</strong><br/><em>${s.directive}</em>`;
+            }
+            return html;
+          };
+
+          const routineData: any[] = [];
+          CHAMBER_KEYS.forEach(chamberKey => {
+            const script = getChamberScriptForProgram(programId, chamberKey, dayNum);
+            if ((script.steps && script.steps.length > 0) || script.directive) {
+              const info = CHAMBERS_INFO[chamberKey as keyof typeof CHAMBERS_INFO];
+              const chamberName = info ? info.name : chamberKey.toUpperCase();
+              const defaultAnchor = info ? (info as any).defaultAnchor : 'Varies';
+              const window = getChamberWindow(chamberKey, script.when);
+              const chamberIndex = CHAMBER_KEYS.indexOf(chamberKey as any);
+
+              routineData.push({
+                window,
+                system: chamberName,
+                anchor: script.duration || defaultAnchor || 'Varies',
+                instruction: formatStepsHtml(script),
+                chamberIndex
+              });
+            }
+          });
+
+          const orderMap: Record<string, number> = {
+            'Morning': 1,
+            'Mid-Morning': 2,
+            'Midday': 3,
+            'Afternoon': 4,
+            'Evening': 5,
+            'Night': 6
+          };
+
+          routineData.sort((a, b) => {
+            const orderA = orderMap[a.window] || 99;
+            const orderB = orderMap[b.window] || 99;
+            if (orderA !== orderB) return orderA - orderB;
+            return a.chamberIndex - b.chamberIndex;
+          });
+
+          const cleanRoutineData = routineData.map(({ window, system, anchor, instruction }) => ({
+            window,
+            system,
+            anchor,
+            instruction
+          }));
+
+          const newDescription = generateRoutineHtml(cleanRoutineData);
+          lesson.description = newDescription;
+
+          const { tasks, ...payload } = lesson;
+          await saveLessonMutation.mutateAsync({
+            ...payload,
+            description: newDescription
+          });
+
+          // 2. Sync Tasks
+          const steps = getCombinedStepsForDay(programId, dayNum);
+          if (steps.length > 0) {
+            const existingTasks = lesson.tasks || [];
+            const updatedTasksList = [...existingTasks];
+            
+            for (let sIdx = 0; sIdx < steps.length; sIdx++) {
+              const step = steps[sIdx];
+              const existingTaskIndex = updatedTasksList.findIndex(t => t.title === step.title);
+              
+              let mappedType: 'checklist' | 'audio' | 'video' | 'text' = 'text';
+              if (step.type === 'audio') mappedType = 'audio';
+              else if (step.type === 'video') mappedType = 'video';
+              else mappedType = 'text';
+              
+              const targetContent = {
+                routine_window: step.routineWindow,
+                url: step.contentUrl || '',
+                text: step.textContent || ''
+              };
+              
+              if (existingTaskIndex >= 0) {
+                const existingTask = updatedTasksList[existingTaskIndex];
+                const contentDiffers = JSON.stringify(existingTask.content || {}) !== JSON.stringify(targetContent) || existingTask.type !== mappedType;
+                
+                if (contentDiffers) {
+                  const updatedTask = {
+                    ...existingTask,
+                    type: mappedType,
+                    content: targetContent
+                  };
+                  await saveTaskMutation.mutateAsync(updatedTask);
+                  updatedTasksList[existingTaskIndex] = updatedTask;
+                }
+              } else {
+                const newTask = await saveTaskMutation.mutateAsync({
+                  lesson_id: lesson.id,
+                  title: step.title,
+                  type: mappedType,
+                  order_index: sIdx,
+                  content: targetContent
+                });
+                updatedTasksList.push(newTask);
+              }
+            }
+            lesson.tasks = updatedTasksList;
+          }
+
+          processed++;
+          setSyncProgress(Math.round((processed / totalLessons) * 100));
+        }
+      }
+
+      setLocalModules(newModules);
+      setNotification({ open: true, message: 'All lessons and tasks synced successfully!', severity: 'success' });
+    } catch (err: any) {
+      console.error(err);
+      setNotification({ open: true, message: `Failed to sync all: ${err.message || err}`, severity: 'error' });
+    } finally {
+      setIsSyncingAll(false);
+    }
+  };
+
+  const handleInitializeProgram = async () => {
+    if (!programId) {
+      setNotification({ open: true, message: 'Please save the program settings first.', severity: 'error' });
+      return;
+    }
+    if (localModules && localModules.length > 0) {
+      if (!window.confirm('WARNING: This program already has modules. Initializing will append 8 Chambers modules. Do you want to proceed?')) {
+        return;
+      }
+    }
+
+    setIsInitializing(true);
+    setInitProgress(0);
+    const duration = programData.duration_days || 30;
+    const chambersList = [
+      'MENTAL CLARITY',
+      'THE FREQUENCY FIELD',
+      'FIELD DESIGN',
+      'THE LIVING FRAME',
+      'THE PLATE',
+      'SLEEP COCOON',
+      'BREATH ATELIER',
+      'THE SIGNATURE'
+    ];
+
+    try {
+      const initializedModules: any[] = [];
+      
+      for (let i = 0; i < chambersList.length; i++) {
+        const chamberTitle = chambersList[i];
+        setInitStatusText(`Creating Module: ${chamberTitle}...`);
+        
+        // 1. Create Module
+        const newMod = await saveModuleMutation.mutateAsync({
+          program_id: programId,
+          title: chamberTitle,
+          order_index: i + 1
+        });
+
+        const lessonsList: any[] = [];
+        const chamberKey = matchChamberKey(chamberTitle);
+        const dayTitles = getChamberDayTitlesForProgram(programId, chamberKey, duration);
+
+        // 2. Create Lessons for this module
+        for (let d = 1; d <= duration; d++) {
+          setInitStatusText(`Creating Lesson: ${chamberTitle} — Day ${d} of ${duration}...`);
+          
+          const dayTitle = dayTitles.find(t => t.day === d)?.title || `Day ${d}`;
+          
+          // Generate combined routine HTML
+          const formatStepsHtml = (s: ChamberScript) => {
+            let html = `<strong>When:</strong> ${s.when || 'Varies'} | <strong>Duration:</strong> ${s.duration || 'Varies'}<br/><br/>`;
+            if (s.steps && s.steps.length > 0) {
+              html += '<strong>Steps:</strong><ul>';
+              s.steps.forEach((step: ChamberStep) => {
+                let assetLink = '';
+                if (step.contentUrl) {
+                  assetLink = ` (<a href="${step.contentUrl}" target="_blank" style="color:#D4AF37;text-decoration:underline;">View Asset</a>)`;
+                }
+                html += `<li>[${step.type.toUpperCase()}] ${step.title}${assetLink}</li>`;
+              });
+              html += '</ul>';
+            }
+            if (s.directive) {
+              html += `<br/><strong>DIRECTIVE:</strong><br/><em>${s.directive}</em>`;
+            }
+            return html;
+          };
+
+          const routineData: any[] = [];
+          CHAMBER_KEYS.forEach(ck => {
+            const script = getChamberScriptForProgram(programId, ck, d);
+            if ((script.steps && script.steps.length > 0) || script.directive) {
+              const info = CHAMBERS_INFO[ck as keyof typeof CHAMBERS_INFO];
+              const chamberName = info ? info.name : ck.toUpperCase();
+              const defaultAnchor = info ? (info as any).defaultAnchor : 'Varies';
+              const window = getChamberWindow(ck, script.when);
+              const chamberIndex = CHAMBER_KEYS.indexOf(ck as any);
+
+              routineData.push({
+                window,
+                system: chamberName,
+                anchor: script.duration || defaultAnchor || 'Varies',
+                instruction: formatStepsHtml(script),
+                chamberIndex
+              });
+            }
+          });
+
+          const orderMap: Record<string, number> = {
+            'Morning': 1,
+            'Mid-Morning': 2,
+            'Midday': 3,
+            'Afternoon': 4,
+            'Evening': 5,
+            'Night': 6
+          };
+
+          routineData.sort((a, b) => {
+            const orderA = orderMap[a.window] || 99;
+            const orderB = orderMap[b.window] || 99;
+            if (orderA !== orderB) return orderA - orderB;
+            return a.chamberIndex - b.chamberIndex;
+          });
+
+          const cleanRoutineData = routineData.map(({ window, system, anchor, instruction }) => ({
+            window,
+            system,
+            anchor,
+            instruction
+          }));
+
+          const routineHtml = generateRoutineHtml(cleanRoutineData);
+
+          const newLesson = await saveLessonMutation.mutateAsync({
+            module_id: newMod.id,
+            title: dayTitle,
+            day_number: d,
+            unlock_day: d,
+            description: routineHtml
+          });
+
+          // 3. Sync Tasks for this lesson
+          const steps = getCombinedStepsForDay(programId, d);
+          const tasksList: any[] = [];
+          if (steps.length > 0) {
+            for (let sIdx = 0; sIdx < steps.length; sIdx++) {
+              const step = steps[sIdx];
+              
+              let mappedType: 'checklist' | 'audio' | 'video' | 'text' = 'text';
+              if (step.type === 'audio') mappedType = 'audio';
+              else if (step.type === 'video') mappedType = 'video';
+              else mappedType = 'text';
+              
+              const targetContent = {
+                routine_window: step.routineWindow,
+                url: step.contentUrl || '',
+                text: step.textContent || ''
+              };
+
+              const newTask = await saveTaskMutation.mutateAsync({
+                lesson_id: newLesson.id,
+                title: step.title,
+                type: mappedType,
+                order_index: sIdx,
+                content: targetContent
+              });
+              tasksList.push(newTask);
+            }
+          }
+
+          lessonsList.push({
+            ...newLesson,
+            tasks: tasksList
+          });
+
+          const currentTotalProcessed = i * duration + d;
+          const grandTotal = chambersList.length * duration;
+          setInitProgress(Math.round((currentTotalProcessed / grandTotal) * 100));
+        }
+
+        initializedModules.push({
+          ...newMod,
+          lessons: lessonsList
+        });
+      }
+
+      setLocalModules([...(localModules || []), ...initializedModules]);
+      setNotification({ open: true, message: `Successfully initialized standard ${duration}-day structure and synced all tasks/routines!`, severity: 'success' });
+    } catch (err: any) {
+      console.error(err);
+      setNotification({ open: true, message: `Initialization failed: ${err.message || err}`, severity: 'error' });
+    } finally {
+      setIsInitializing(false);
+      setInitStatusText('');
+    }
+  };
+
+  const syncTasksFromChambers = async () => {
+    if (!localModules || localModules.length === 0) return;
+    
+    let syncedAny = false;
+    const newModules = JSON.parse(JSON.stringify(localModules));
+    
+    for (let mIdx = 0; mIdx < newModules.length; mIdx++) {
+      const module = newModules[mIdx];
+      const moduleChamberKey = matchChamberKey(module.title);
+      
+      if (!moduleChamberKey) continue;
+      
+      for (let lIdx = 0; lIdx < (module.lessons || []).length; lIdx++) {
+        const lesson = module.lessons[lIdx];
+        const dayNum = lesson.day_number || 1;
+        const steps = getCombinedStepsForDay(programId, dayNum);
+        
+        if (steps.length === 0) continue;
+        
+        const existingTasks = lesson.tasks || [];
+        const updatedTasksList = [...existingTasks];
+        let lessonUpdated = false;
+        
+        for (let sIdx = 0; sIdx < steps.length; sIdx++) {
+          const step = steps[sIdx];
+          
+          const existingTaskIndex = updatedTasksList.findIndex(t => t.title === step.title);
+          
+          let mappedType: 'checklist' | 'audio' | 'video' | 'text' = 'text';
+          if (step.type === 'audio') mappedType = 'audio';
+          else if (step.type === 'video') mappedType = 'video';
+          else mappedType = 'text';
+          
+          const targetContent = {
+            routine_window: step.routineWindow,
+            url: step.contentUrl || '',
+            text: step.textContent || ''
+          };
+          
+          if (existingTaskIndex >= 0) {
+            const existingTask = updatedTasksList[existingTaskIndex];
+            const contentDiffers = JSON.stringify(existingTask.content || {}) !== JSON.stringify(targetContent) || existingTask.type !== mappedType;
+            
+            if (contentDiffers) {
+              const updatedTask = {
+                ...existingTask,
+                type: mappedType,
+                content: targetContent
+              };
+              
+              await saveTaskMutation.mutateAsync(updatedTask);
+              updatedTasksList[existingTaskIndex] = updatedTask;
+              lessonUpdated = true;
+              syncedAny = true;
+            }
+          } else {
+            const newTask = await saveTaskMutation.mutateAsync({
+              lesson_id: lesson.id,
+              title: step.title,
+              type: mappedType,
+              order_index: sIdx,
+              content: targetContent
+            });
+            
+            updatedTasksList.push(newTask);
+            lessonUpdated = true;
+            syncedAny = true;
+          }
+        }
+        
+        if (lessonUpdated) {
+          module.lessons[lIdx] = {
+            ...lesson,
+            tasks: updatedTasksList
+          };
+        }
+      }
+    }
+    
+    if (syncedAny) {
+      setLocalModules(newModules);
+      setNotification({ 
+        open: true, 
+        message: 'Successfully auto-synced tasks from Chambers configuration.', 
+        severity: 'success' 
+      });
+    }
+  };
+
+
+
+
+  const handleSyncRoutine = async (moduleId: string, lesson: any) => {
+    try {
+      const module = localModules.find(m => m.id === moduleId);
+      if (!module) return;
+
+      const dayNum = lesson.day_number || 1;
+
+      const formatStepsHtml = (s: ChamberScript) => {
+        let html = `<strong>When:</strong> ${s.when || 'Varies'} | <strong>Duration:</strong> ${s.duration || 'Varies'}<br/><br/>`;
+        if (s.steps && s.steps.length > 0) {
+          html += '<strong>Steps:</strong><ul>';
+          s.steps.forEach((step: ChamberStep) => {
+            let assetLink = '';
+            if (step.contentUrl) {
+              assetLink = ` (<a href="${step.contentUrl}" target="_blank" style="color:#D4AF37;text-decoration:underline;">View Asset</a>)`;
+            }
+            html += `<li>[${step.type.toUpperCase()}] ${step.title}${assetLink}</li>`;
+          });
+          html += '</ul>';
+        }
+        if (s.directive) {
+          html += `<br/><strong>DIRECTIVE:</strong><br/><em>${s.directive}</em>`;
+        }
+        return html;
+      };
+
+      const routineData: Array<{
+        window: string;
+        system: string;
+        anchor: string;
+        instruction: string;
+        chamberIndex: number;
+      }> = [];
+
+      CHAMBER_KEYS.forEach(chamberKey => {
+        const script = getChamberScriptForProgram(programId, chamberKey, dayNum);
+        // Only include if there are steps or directive
+        if ((script.steps && script.steps.length > 0) || script.directive) {
+          const info = CHAMBERS_INFO[chamberKey as keyof typeof CHAMBERS_INFO];
+          const chamberName = info ? info.name : chamberKey.toUpperCase();
+          const defaultAnchor = info ? (info as any).defaultAnchor : 'Varies';
+          const window = getChamberWindow(chamberKey, script.when);
+          const chamberIndex = CHAMBER_KEYS.indexOf(chamberKey as any);
+
+          routineData.push({
+            window,
+            system: chamberName,
+            anchor: script.duration || defaultAnchor || 'Varies',
+            instruction: formatStepsHtml(script),
+            chamberIndex
+          });
+        }
+      });
+
+      const orderMap: Record<string, number> = {
+        'Morning': 1,
+        'Mid-Morning': 2,
+        'Midday': 3,
+        'Afternoon': 4,
+        'Evening': 5,
+        'Night': 6
+      };
+
+      routineData.sort((a, b) => {
+        const orderA = orderMap[a.window] || 99;
+        const orderB = orderMap[b.window] || 99;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.chamberIndex - b.chamberIndex;
+      });
+
+      const cleanRoutineData = routineData.map(({ window, system, anchor, instruction }) => ({
+        window,
+        system,
+        anchor,
+        instruction
+      }));
+
+      const newDescription = generateRoutineHtml(cleanRoutineData);
+      
+      updateLessonDescription(moduleId, lesson.id, newDescription);
+      
+      const { tasks, ...payload } = lesson;
+      await saveLessonMutation.mutateAsync({
+        ...payload,
+        description: newDescription
+      });
+      
+      setNotification({ open: true, message: `Routine combined and synced for Day ${dayNum} from all Chamber scripts.`, severity: 'success' });
+    } catch (e) {
+      console.error(e);
+      setNotification({ open: true, message: 'Failed to sync routine.', severity: 'error' });
+    }
+  };
+
   const updateTaskTitle = (lessonId: string, taskId: string, title: string) => {
     setLocalModules(prev => prev.map(m => ({
       ...m,
@@ -553,6 +1102,7 @@ const ProgramBuilder = () => {
               { id: 'settings', label: 'General Settings', icon: Settings },
               { id: 'modules', label: 'Modules & Lessons', icon: GripVertical },
               { id: 'tasks', label: 'Task Engineering', icon: Plus },
+              { id: 'created', label: 'Created Program', icon: FolderOpen },
             ].map((tab) => (
               <Button 
                 key={tab.id}
@@ -594,7 +1144,88 @@ const ProgramBuilder = () => {
                 ))}
               </Select>
             </FormControl>
+            {programId && (
+              <Stack direction="row" spacing={2} sx={{ ml: 'auto', alignItems: 'center' }}>
+                {localModules?.length === 0 && (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={handleInitializeProgram}
+                    disabled={isInitializing || isSyncingAll}
+                    startIcon={isInitializing ? <CircularProgress size={14} color="inherit" /> : <Cpu size={14} />}
+                    sx={{
+                      backgroundColor: '#D4AF37',
+                      color: '#0B0B0F',
+                      fontWeight: 700,
+                      '&:hover': { backgroundColor: '#F3CD57' },
+                      '&.Mui-disabled': { backgroundColor: 'rgba(212, 175, 55, 0.3)', color: '#666' }
+                    }}
+                  >
+                    {isInitializing ? 'Initializing...' : 'Initialize 8 Chambers'}
+                  </Button>
+                )}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleSyncAll}
+                  disabled={isSyncingAll || isInitializing || localModules?.length === 0}
+                  startIcon={isSyncingAll ? <CircularProgress size={14} color="inherit" /> : <Cpu size={14} />}
+                  sx={{
+                    color: '#D4AF37',
+                    borderColor: 'rgba(212, 175, 55, 0.4)',
+                    '&:hover': { borderColor: '#D4AF37', backgroundColor: 'rgba(212, 175, 55, 0.05)' },
+                    '&.Mui-disabled': { borderColor: 'rgba(212, 175, 55, 0.1)', color: '#666' }
+                  }}
+                >
+                  {isSyncingAll ? `Syncing (${syncProgress}%)` : 'Sync All Tasks & Routines'}
+                </Button>
+                <Button
+                  component={Link}
+                  to={`/admin/chambers/mental-clarity?programId=${programId}`}
+                  variant="outlined"
+                  size="small"
+                  sx={{ 
+                    color: 'var(--emerald-primary)',
+                    borderColor: 'var(--emerald-mid)',
+                    '&:hover': { borderColor: 'var(--emerald-light)', backgroundColor: 'var(--emerald-dark)' }
+                  }}
+                >
+                  Configure Daily Protocols
+                </Button>
+              </Stack>
+            )}
           </Paper>
+
+          {/* Progress Banner for Batch Operations */}
+          {(isInitializing || isSyncingAll) && (
+            <Paper sx={{ p: 3, mb: 3, backgroundColor: 'rgba(212, 175, 55, 0.05)', border: '1px solid rgba(212, 175, 55, 0.2)' }}>
+              <Stack spacing={1}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="subtitle2" sx={{ color: '#D4AF37', fontWeight: 800 }}>
+                    {isInitializing ? 'INITIALIZING STANDARD 8 CHAMBERS STRUCTURE' : 'SYNCING ALL LESSONS & TASKS'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 700 }}>
+                    {isInitializing ? `${initProgress}%` : `${syncProgress}%`}
+                  </Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={isInitializing ? initProgress : syncProgress} 
+                  sx={{ 
+                    height: 8, 
+                    borderRadius: 4,
+                    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+                    '& .MuiLinearProgress-bar': { backgroundColor: '#D4AF37' }
+                  }} 
+                />
+                {isInitializing && initStatusText && (
+                  <Typography variant="caption" sx={{ color: '#B0B0B0', fontStyle: 'italic' }}>
+                    {initStatusText}
+                  </Typography>
+                )}
+              </Stack>
+            </Paper>
+          )}
 
           {activeTab === 'settings' && (
             <Paper sx={{ p: 4 }}>
@@ -780,21 +1411,31 @@ const ProgramBuilder = () => {
                           {expandedModules.includes(module.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                         </IconButton>
                         <Typography variant="subtitle2" sx={{ color: 'var(--emerald-primary)', fontWeight: 800 }}>M{mIdx + 1}</Typography>
-                        <TextField 
-                          fullWidth 
-                          variant="standard" 
-                          placeholder="Module Title" 
-                          value={module.title}
-                          onChange={(e) => updateModuleTitle(module.id, e.target.value)}
-                          onBlur={() => persistModule(module)}
-                          onClick={(e) => e.stopPropagation()} // Prevent collapse when editing title
-                          slotProps={{
-                            input: {
-                              disableUnderline: true,
-                              sx: { fontWeight: 700, fontSize: '1rem' }
-                            }
-                          }}
-                        />
+                        <FormControl size="small" variant="standard" sx={{ minWidth: 280 }} onClick={(e) => e.stopPropagation()}>
+                          <Select
+                            value={module.title || ''}
+                            onChange={async (e) => {
+                              const newTitle = e.target.value;
+                              updateModuleTitle(module.id, newTitle);
+                              const updatedModule = { ...module, title: newTitle };
+                              const { lessons, ...payload } = updatedModule;
+                              await saveModuleMutation.mutateAsync(payload);
+                            }}
+                            displayEmpty
+                            disableUnderline
+                            sx={{ fontWeight: 700, fontSize: '1rem', color: '#EAEAEA' }}
+                          >
+                            <MenuItem value="" disabled><em>Select Chamber</em></MenuItem>
+                            <MenuItem value="MENTAL CLARITY">MENTAL CLARITY</MenuItem>
+                            <MenuItem value="THE FREQUENCY FIELD">THE FREQUENCY FIELD</MenuItem>
+                            <MenuItem value="FIELD DESIGN">FIELD DESIGN</MenuItem>
+                            <MenuItem value="THE LIVING FRAME">THE LIVING FRAME</MenuItem>
+                            <MenuItem value="THE PLATE">THE PLATE</MenuItem>
+                            <MenuItem value="SLEEP COCOON">SLEEP COCOON</MenuItem>
+                            <MenuItem value="BREATH ATELIER">BREATH ATELIER</MenuItem>
+                            <MenuItem value="THE SIGNATURE">THE SIGNATURE</MenuItem>
+                          </Select>
+                        </FormControl>
                         <IconButton 
                           size="small" 
                           onClick={(e) => {
@@ -812,6 +1453,9 @@ const ProgramBuilder = () => {
                           <Stack spacing={1}>
                             {module.lessons?.map((lesson: any, lIdx: number) => {
                               const isLessonExpanded = expandedLessons.includes(lesson.id);
+                              const moduleChamberKey = matchChamberKey(module.title);
+                              const dayTitles = moduleChamberKey ? getChamberDayTitlesForProgram(programId, moduleChamberKey, programData.duration_days || 30) : [];
+
                               return (
                                 <Box 
                                   key={lesson.id} 
@@ -838,21 +1482,92 @@ const ProgramBuilder = () => {
                                     >
                                       {isLessonExpanded ? <ExpandMoreIcon /> : <ChevronRightIcon />}
                                     </IconButton>
-                                    <Typography variant="caption" sx={{ color: '#666', fontWeight: 700, minWidth: 40 }}>DAY {lesson.day_number}</Typography>
-                                    <TextField 
-                                      fullWidth 
-                                      variant="standard" 
-                                      placeholder="Lesson Title" 
-                                      value={lesson.title}
-                                      onChange={(e) => updateLessonTitle(module.id, lesson.id, e.target.value)}
-                                      onBlur={() => persistLesson(lesson)}
-                                      slotProps={{
-                                        input: {
-                                          disableUnderline: true,
-                                          sx: { fontSize: '0.9rem', color: '#EAEAEA' }
-                                        }
+                                    <FormControl size="small" variant="standard" sx={{ minWidth: 110 }}>
+                                      <Select
+                                        value={lesson.day_number || 1}
+                                        onChange={async (e) => {
+                                          const newDayNum = Number(e.target.value);
+                                          const dayTitle = dayTitles.find(t => t.day === newDayNum)?.title || `Day ${newDayNum}`;
+                                          
+                                          updateLessonDayNumber(module.id, lesson.id, newDayNum);
+                                          updateLessonTitle(module.id, lesson.id, dayTitle);
+                                          
+                                          const updatedLesson = { 
+                                            ...lesson, 
+                                            day_number: newDayNum, 
+                                            unlock_day: newDayNum,
+                                            title: dayTitle
+                                          };
+                                          const { tasks, ...payload } = updatedLesson;
+                                          await saveLessonMutation.mutateAsync(payload);
+                                        }}
+                                        disableUnderline
+                                        sx={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--emerald-primary)' }}
+                                      >
+                                        {Array.from({ length: programData.duration_days || 30 }, (_, i) => i + 1).map(dayNum => {
+                                          const label = getDayOfWeekLabel(dayNum);
+                                          const themeStr = getDayTheme(programId, dayNum);
+                                          return (
+                                            <MenuItem key={dayNum} value={dayNum} sx={{ fontSize: '0.8rem' }}>
+                                              {label.slice(0, 3)} (Day {dayNum}) — {themeStr}
+                                            </MenuItem>
+                                          );
+                                        })}
+                                      </Select>
+                                    </FormControl>
+                                    <FormControl size="small" variant="standard" sx={{ minWidth: 200, flexGrow: 1 }}>
+                                      <Select
+                                        value={lesson.title || ''}
+                                        onChange={async (e) => {
+                                          const selectedTitle = e.target.value;
+                                          const foundDay = dayTitles.find(t => t.title === selectedTitle);
+                                          const newDayNum = foundDay ? foundDay.day : (lesson.day_number || 1);
+                                          
+                                          updateLessonTitle(module.id, lesson.id, selectedTitle);
+                                          updateLessonDayNumber(module.id, lesson.id, newDayNum);
+                                          
+                                          const updatedLesson = { 
+                                            ...lesson, 
+                                            title: selectedTitle, 
+                                            day_number: newDayNum, 
+                                            unlock_day: newDayNum 
+                                          };
+                                          const { tasks, ...payload } = updatedLesson;
+                                          await saveLessonMutation.mutateAsync(payload);
+                                        }}
+                                        displayEmpty
+                                        disableUnderline
+                                        sx={{ fontSize: '0.9rem', color: '#EAEAEA', fontWeight: 600 }}
+                                      >
+                                        <MenuItem value="" disabled><em>Select Day Protocol Title</em></MenuItem>
+                                        {dayTitles.map((t) => (
+                                          <MenuItem key={t.day} value={t.title} sx={{ fontSize: '0.85rem' }}>
+                                            {t.title} (Day {t.day})
+                                          </MenuItem>
+                                        ))}
+                                        {lesson.title && !dayTitles.some(t => t.title === lesson.title) && (
+                                          <MenuItem value={lesson.title}>{lesson.title}</MenuItem>
+                                        )}
+                                      </Select>
+                                    </FormControl>
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      onClick={() => handleSyncRoutine(module.id, lesson)}
+                                      startIcon={<Cpu size={12} />}
+                                      sx={{ 
+                                        fontSize: '0.7rem', 
+                                        py: 0.5, 
+                                        color: '#D4AF37', 
+                                        borderColor: 'rgba(212, 175, 55, 0.3)',
+                                        '&:hover': { borderColor: '#D4AF37', backgroundColor: 'rgba(212, 175, 55, 0.05)' },
+                                        textTransform: 'none',
+                                        minWidth: 100,
+                                        mr: 1
                                       }}
-                                    />
+                                    >
+                                      Sync Routine
+                                    </Button>
                                     <IconButton 
                                       size="small" 
                                       onClick={() => toggleExpandedLesson(lesson.id)}
@@ -988,171 +1703,152 @@ const ProgramBuilder = () => {
             <Paper sx={{ p: 4 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                 <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 800 }}>Task Engineering</Typography>
-                  <Typography variant="caption" sx={{ color: '#B0B0B0' }}>Define the daily actions and engagements for members.</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800 }}>Task Engineering (Timeline Dashboard)</Typography>
+                  <Typography variant="caption" sx={{ color: '#B0B0B0' }}>Read-only daily schedule grouped by time windows, synced from the Chambers configuration.</Typography>
                 </Box>
               </Box>
 
               {!programId ? (
                 <Box sx={{ py: 8, textAlign: 'center' }}>
-                  <Typography variant="body1" sx={{ color: '#666', mb: 2 }}>Please save the program settings first.</Typography>
-                  <Button variant="outlined" onClick={() => setActiveTab('settings')} sx={{ color: 'var(--emerald-primary)' }}>Return to Settings</Button>
+                  <Typography variant="body1" sx={{ color: '#666', mb: 2 }}>Please select an active program to view its timeline.</Typography>
                 </Box>
+              ) : isLoadingDetails ? (
+                <Box sx={{ py: 8, textAlign: 'center' }}><CircularProgress size={30} sx={{ color: 'var(--emerald-primary)' }} /></Box>
               ) : (
                 <Stack spacing={4}>
-                  {localModules?.map((module, mIdx) => (
-                    <Box key={module.id}>
-                      <Typography variant="subtitle2" sx={{ color: 'var(--emerald-primary)', fontWeight: 800, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <GripVertical size={14} /> MODULE {mIdx + 1}: {module.title}
-                      </Typography>
-                      <Stack spacing={2}>
-                        {module.lessons?.map((lesson: any, lIdx: number) => (
-                          <Paper 
-                            key={lesson.id} 
-                            sx={{ 
-                              p: 2, 
-                              backgroundColor: 'rgba(255, 255, 255, 0.01)', 
-                              border: '1px solid rgba(255, 255, 255, 0.05)' 
-                            }}
+                  {(() => {
+                    const duration = programDetails?.duration_days || 30;
+                    const daysArray = Array.from({ length: duration }, (_, i) => i + 1);
+                    const windowsOrder = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night', 'General Task'];
+
+                    // Gather unique tasks by title for each day
+                    const getTasksForDay = (dayNum: number) => {
+                      const dayTasks: any[] = [];
+                      const seenTitles = new Set<string>();
+                      localModules?.forEach((mod: any) => {
+                        const lesson = mod.lessons?.find((l: any) => l.day_number === dayNum);
+                        lesson?.tasks?.forEach((t: any) => {
+                          if (!seenTitles.has(t.title)) {
+                            seenTitles.add(t.title);
+                            dayTasks.push(t);
+                          }
+                        });
+                      });
+                      return dayTasks;
+                    };
+
+                    const daysWithTasks = daysArray.map(dayNum => {
+                      const dayTasks = getTasksForDay(dayNum);
+                      // Group them
+                      const groups: Record<string, any[]> = {};
+                      dayTasks.forEach(t => {
+                        const win = t.content?.routine_window || 'General Task';
+                        if (!groups[win]) groups[win] = [];
+                        groups[win].push(t);
+                      });
+                      return { dayNum, groups, total: dayTasks.length };
+                    }).filter(d => d.total > 0);
+
+                    if (daysWithTasks.length === 0) {
+                      return (
+                        <Box sx={{ py: 8, textAlign: 'center', border: '2px dashed rgba(255, 255, 255, 0.05)', borderRadius: 4 }}>
+                          <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>No tasks have been synchronized for this program yet.</Typography>
+                          <Button 
+                            variant="outlined" 
+                            component={Link} 
+                            to={`/admin/chambers/mental-clarity?programId=${programId}`}
+                            sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}
                           >
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#B0B0B0' }}>
-                                Day {lesson.day_number}: {lesson.title}
-                              </Typography>
-                              <Box sx={{ display: 'flex', gap: 1 }}>
-                                <Button size="small" variant="outlined" onClick={() => handleAddTask(lesson.id, 'checklist')} startIcon={<CheckSquare size={14} />} sx={{ fontSize: '0.65rem', py: 0.5 }}>+ Checklist</Button>
-                                <Button size="small" variant="outlined" onClick={() => handleAddTask(lesson.id, 'audio')} startIcon={<Mic size={14} />} sx={{ fontSize: '0.65rem', py: 0.5 }}>+ Audio</Button>
-                                <Button size="small" variant="outlined" onClick={() => handleAddTask(lesson.id, 'video')} startIcon={<PlayCircle size={14} />} sx={{ fontSize: '0.65rem', py: 0.5 }}>+ Video</Button>
-                                <Button size="small" variant="outlined" onClick={() => handleAddTask(lesson.id, 'text')} startIcon={<MessageSquare size={14} />} sx={{ fontSize: '0.65rem', py: 0.5 }}>+ Text</Button>
-                              </Box>
-                            </Box>
-                            
-                            <Stack spacing={1}>
-                              {lesson.tasks?.map((task: any) => (
-                                <Box 
-                                  key={task.id} 
+                            Configure Tasks in Chambers Page
+                          </Button>
+                        </Box>
+                      );
+                    }
+
+                    return daysWithTasks.map(({ dayNum, groups }) => (
+                      <Paper key={dayNum} sx={{ p: 3, border: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(255, 255, 255, 0.01)' }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'var(--emerald-primary)', mb: 3 }}>
+                          Day {dayNum}: {getDayTheme(programId, dayNum)}
+                        </Typography>
+                        <Stack spacing={3}>
+                          {windowsOrder.map(windowName => {
+                            const windowTasks = groups[windowName] || [];
+                            if (windowTasks.length === 0) return null;
+
+                            return (
+                              <Box key={windowName}>
+                                <Typography 
+                                  variant="caption" 
                                   sx={{ 
-                                    p: 1.5, 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: 2, 
-                                    borderRadius: 1, 
-                                    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                                    border: '1px solid rgba(255, 255, 255, 0.03)'
+                                    color: '#D4AF37', 
+                                    fontWeight: 800, 
+                                    letterSpacing: 1.5, 
+                                    textTransform: 'uppercase',
+                                    display: 'block',
+                                    borderBottom: '1px solid rgba(212, 175, 55, 0.1)',
+                                    pb: 0.5,
+                                    mb: 1.5
                                   }}
                                 >
-                                  {task.type === 'checklist' && <CheckSquare size={16} color="#4CAF50" />}
-                                  {task.type === 'audio' && <Mic size={16} color="#2196F3" />}
-                                  {task.type === 'video' && <PlayCircle size={16} color="#f44336" />}
-                                  {task.type === 'text' && <MessageSquare size={16} color="var(--emerald-primary)" />}
-                                  
-                                  <TextField 
-                                    fullWidth 
-                                    variant="standard" 
-                                    value={task.title}
-                                    onChange={(e) => updateTaskTitle(lesson.id, task.id, e.target.value)}
-                                    onBlur={() => persistTask(task)}
-                                    slotProps={{
-                                      input: {
-                                        disableUnderline: true,
-                                        sx: { fontSize: '0.85rem', fontWeight: 600 }
-                                      }
-                                    }}
-                                  />
-
-                                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                    <Select
-                                      size="small"
-                                      value={task.content?.routine_window || ''}
-                                      onChange={async (e) => {
-                                        const windowName = e.target.value;
-                                        updateTaskWindow(lesson.id, task.id, windowName);
-                                        const updatedTask = {
-                                          ...task,
-                                          content: { ...task.content, routine_window: windowName }
-                                        };
-                                        await persistTask(updatedTask);
-                                      }}
-                                      displayEmpty
-                                      sx={{ 
-                                        minWidth: 120, 
-                                        height: 28, 
-                                        fontSize: '0.75rem',
-                                        color: '#B0B0B0',
-                                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.08)' },
-                                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--emerald-primary)' }
-                                      }}
-                                    >
-                                      <MenuItem value="" sx={{ fontSize: '0.75rem' }}><em>General Task</em></MenuItem>
-                                      <MenuItem value="Morning" sx={{ fontSize: '0.75rem' }}>Morning</MenuItem>
-                                      <MenuItem value="Mid-Morning" sx={{ fontSize: '0.75rem' }}>Mid-Morning</MenuItem>
-                                      <MenuItem value="Midday" sx={{ fontSize: '0.75rem' }}>Midday</MenuItem>
-                                      <MenuItem value="Afternoon" sx={{ fontSize: '0.75rem' }}>Afternoon</MenuItem>
-                                      <MenuItem value="Evening" sx={{ fontSize: '0.75rem' }}>Evening</MenuItem>
-                                      <MenuItem value="Night" sx={{ fontSize: '0.75rem' }}>Night</MenuItem>
-                                    </Select>
-
-                                    {(task.type === 'audio' || task.type === 'video') && (
-                                      <Box>
-                                        <input
-                                          type="file"
-                                          accept={task.type === 'audio' ? 'audio/*' : 'video/*'}
-                                          id={`upload-${task.id}`}
-                                          style={{ display: 'none' }}
-                                          onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) handleFileUpload(lesson.id, task, file);
-                                          }}
-                                        />
-                                        <label htmlFor={`upload-${task.id}`}>
-                                          <IconButton 
-                                            size="small" 
-                                            component="span" 
-                                            sx={{ color: task.content?.url ? 'var(--emerald-primary)' : '#666' }}
-                                            title={task.content?.url ? 'Change File' : 'Upload File'}
-                                          >
-                                            {uploadAssetMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <Upload size={14} />}
-                                          </IconButton>
-                                        </label>
-                                      </Box>
-                                    )}
-                                    
-                                    {task.content?.url && (
-                                      <IconButton size="small" sx={{ color: 'var(--emerald-primary)' }} onClick={() => window.open(task.content.url, '_blank')}>
-                                        <LinkIcon size={14} />
-                                      </IconButton>
-                                    )}
-
-                                    <IconButton 
-                                      size="small" 
-                                      onClick={() => handleDeleteTask(lesson.id, task.id)} 
-                                      sx={{ 
-                                        color: 'rgba(244, 67, 54, 0.6)', 
-                                        '&:hover': { color: '#f44336', backgroundColor: 'rgba(244, 67, 54, 0.1)' } 
-                                      }}
-                                      title="Delete Task"
-                                    >
-                                      <Trash2 size={16} />
-                                    </IconButton>
-                                  </Stack>
-                                </Box>
-                              ))}
-                              
-                              {(!lesson.tasks || lesson.tasks.length === 0) && (
-                                <Typography variant="caption" sx={{ color: '#444', textAlign: 'center', fontStyle: 'italic', py: 1 }}>
-                                  No tasks added to this day yet.
+                                  {windowName}
                                 </Typography>
-                              )}
-                            </Stack>
-                          </Paper>
-                        ))}
-                      </Stack>
-                      <Divider sx={{ my: 3, opacity: 0.05 }} />
-                    </Box>
-                  ))}
+                                <Grid container spacing={2}>
+                                  {windowTasks.map((task: any) => (
+                                    <Grid size={{ xs: 12, sm: 6 }} key={task.id}>
+                                      <Box 
+                                        sx={{ 
+                                          p: 2, 
+                                          borderRadius: 2, 
+                                          backgroundColor: 'rgba(255, 255, 255, 0.02)', 
+                                          border: '1px solid rgba(255, 255, 255, 0.05)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: 2
+                                        }}
+                                      >
+                                        <Box 
+                                          sx={{ 
+                                            width: 36, 
+                                            height: 36, 
+                                            borderRadius: '50%', 
+                                            backgroundColor: 'rgba(255, 255, 255, 0.05)', 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            justifyContent: 'center',
+                                            color: '#B0B0B0'
+                                          }}
+                                        >
+                                          {task.type === 'checklist' && <CheckSquare size={16} />}
+                                          {task.type === 'audio' && <Mic size={16} />}
+                                          {task.type === 'video' && <PlayCircle size={16} />}
+                                          {task.type === 'text' && <FileText size={16} />}
+                                        </Box>
+                                        <Box>
+                                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#EAEAEA' }}>
+                                            {task.title}
+                                          </Typography>
+                                          <Typography variant="caption" sx={{ color: '#666' }}>
+                                            Type: {task.type.toUpperCase()} {task.content?.url ? '• Has Attachment' : ''}
+                                          </Typography>
+                                        </Box>
+                                      </Box>
+                                    </Grid>
+                                  ))}
+                                </Grid>
+                              </Box>
+                            );
+                          })}
+                        </Stack>
+                      </Paper>
+                    ));
+                  })()}
                 </Stack>
               )}
             </Paper>
+          )}
+
+          {activeTab === 'created' && (
+            <CreatedProgramTab />
           )}
       </Box>
 
@@ -1169,5 +1865,279 @@ const ProgramBuilder = () => {
   );
 };
 
+const ProgramCurriculumView = ({ programId }: { programId: string }) => {
+  const { data: details, isLoading } = useProgramDetails(programId);
+  
+  if (isLoading) {
+    return <Box sx={{ p: 2, display: 'flex', justifyContent: 'center' }}><CircularProgress size={24} sx={{ color: 'var(--emerald-primary)' }} /></Box>;
+  }
+  
+  if (!details || !details.modules || details.modules.length === 0) {
+    return <Typography sx={{ p: 2, color: '#666', fontStyle: 'italic', fontSize: '0.85rem' }}>No modules or tasks created for this program yet.</Typography>;
+  }
+  
+  return (
+    <Stack spacing={2} sx={{ p: 2, backgroundColor: 'rgba(255, 255, 255, 0.01)', borderRadius: 1 }}>
+      {details.modules.map((mod: any, mIdx: number) => (
+        <Box key={mod.id} sx={{ borderLeft: '2px solid var(--emerald-primary)', pl: 2, py: 0.5 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#EAEAEA', fontSize: '0.9rem' }}>
+            Module {mIdx + 1}: {mod.title}
+          </Typography>
+          <Stack spacing={1} sx={{ mt: 1 }}>
+            {mod.lessons?.map((les: any) => (
+              <Box key={les.id} sx={{ pl: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#B0B0B0', fontSize: '0.8rem' }}>
+                  Day {les.day_number}: {les.title}
+                </Typography>
+                <Stack spacing={0.5} sx={{ pl: 2, mt: 0.5 }}>
+                  {les.tasks?.map((task: any, tIdx: number) => (
+                    <Typography key={task.id} variant="caption" sx={{ color: '#888', display: 'block' }}>
+                      Task {tIdx + 1}: {task.title} ({task.content?.routine_window || 'General'} • {task.type})
+                    </Typography>
+                  ))}
+                  {(!les.tasks || les.tasks.length === 0) && (
+                    <Typography variant="caption" sx={{ color: '#444', fontStyle: 'italic' }}>No tasks</Typography>
+                  )}
+                </Stack>
+              </Box>
+            ))}
+            {(!mod.lessons || mod.lessons.length === 0) && (
+              <Typography variant="caption" sx={{ color: '#444', fontStyle: 'italic', pl: 2 }}>No lessons</Typography>
+            )}
+          </Stack>
+        </Box>
+      ))}
+    </Stack>
+  );
+};
+
+const CreatedProgramTab = () => {
+  const { data: allPrograms, isLoading: isLoadingPrograms } = usePrograms();
+  const { data: allUsers, isLoading: isLoadingUsers } = useUsers();
+  const enrollUserMutation = useEnrollUser();
+  const [expandedProgramId, setExpandedProgramId] = useState<string | null>(null);
+  
+  // Assignment state
+  const [assigningProgram, setAssigningProgram] = useState<any | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [assignSnackbar, setAssignSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+
+  const handleAssignClick = (e: React.MouseEvent, program: any) => {
+    e.stopPropagation();
+    setAssigningProgram(program);
+    setSelectedUserId('');
+  };
+
+  const handleConfirmAssignment = async () => {
+    if (!selectedUserId || !assigningProgram) return;
+    try {
+      await enrollUserMutation.mutateAsync({
+        userId: selectedUserId,
+        programId: assigningProgram.id
+      });
+      const userObj = allUsers?.find(u => u.id === selectedUserId);
+      setAssignSnackbar({
+        open: true,
+        message: `Successfully enrolled ${userObj?.full_name || 'user'} in "${assigningProgram.title}"!`,
+        severity: 'success'
+      });
+      setAssigningProgram(null);
+    } catch (err: any) {
+      console.error(err);
+      setAssignSnackbar({
+        open: true,
+        message: `Failed to enroll user: ${err.message || err}`,
+        severity: 'error'
+      });
+    }
+  };
+
+  if (isLoadingPrograms) {
+    return <Box sx={{ py: 8, display: 'flex', justifyContent: 'center' }}><CircularProgress sx={{ color: 'var(--emerald-primary)' }} /></Box>;
+  }
+
+  return (
+    <Box>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>Created & Saved Programs</Typography>
+        <Typography variant="caption" sx={{ color: '#B0B0B0' }}>Inspect curriculum structures and assign programs to users.</Typography>
+      </Box>
+
+      {(!allPrograms || allPrograms.length === 0) ? (
+        <Typography sx={{ color: '#666', fontStyle: 'italic', textAlign: 'center', py: 4 }}>No programs have been created yet. Go to General Settings to start.</Typography>
+      ) : (
+        <Stack spacing={2.5}>
+          {allPrograms.map((p) => {
+            const isExpanded = expandedProgramId === p.id;
+            return (
+              <Paper 
+                key={p.id}
+                sx={{ 
+                  borderRadius: 3,
+                  border: '1px solid',
+                  borderColor: isExpanded ? 'var(--emerald-primary)' : 'rgba(255, 255, 255, 0.05)',
+                  backgroundColor: 'rgba(18, 18, 23, 0.4)',
+                  overflow: 'hidden',
+                  transition: 'all 0.3s'
+                }}
+              >
+                {/* Program Header Bar */}
+                <Box 
+                  onClick={() => setExpandedProgramId(isExpanded ? null : p.id)}
+                  sx={{ 
+                    p: 2.5, 
+                    display: 'flex', 
+                    flexWrap: 'wrap',
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    gap: 2,
+                    cursor: 'pointer',
+                    '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.02)' }
+                  }}
+                >
+                  <Stack direction="row" spacing={2.5} sx={{ alignItems: 'center' }}>
+                    <Box 
+                      sx={{ 
+                        width: 50, 
+                        height: 50, 
+                        borderRadius: 2, 
+                        backgroundColor: 'rgba(212, 175, 55, 0.05)',
+                        border: '1px solid rgba(212, 175, 55, 0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#D4AF37'
+                      }}
+                    >
+                      <Award size={26} />
+                    </Box>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#EAEAEA', fontSize: '1.1rem' }}>
+                        {p.title}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#888', fontSize: '0.8rem', mt: 0.5 }}>
+                        Duration: {p.duration_days} Days • Status: {p.is_published ? 'Published' : 'Draft'}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      startIcon={<UserCheck size={16} />}
+                      onClick={(e) => handleAssignClick(e, p)}
+                      sx={{ 
+                        backgroundColor: 'var(--emerald-primary)', 
+                        color: '#0B0B0F',
+                        fontWeight: 700,
+                        fontSize: '0.75rem',
+                        '&:hover': { backgroundColor: 'var(--emerald-light)' }
+                      }}
+                    >
+                      Assign to User
+                    </Button>
+                    <Box sx={{ color: isExpanded ? 'var(--emerald-primary)' : '#666' }}>
+                      {isExpanded ? <ChevronDown size={22} /> : <ChevronRight size={22} />}
+                    </Box>
+                  </Stack>
+                </Box>
+
+                {/* Program Description */}
+                {p.description && (
+                  <Box sx={{ px: 3, pb: 2, borderBottom: isExpanded ? '1px solid rgba(255, 255, 255, 0.05)' : 'none' }}>
+                    <Typography variant="body2" sx={{ color: '#B0B0B0', fontStyle: 'italic', fontSize: '0.85rem' }}>
+                      {p.description}
+                    </Typography>
+                  </Box>
+                )}
+
+                {/* Collapsible Curriculum View */}
+                {isExpanded && (
+                  <Box sx={{ p: 2.5, backgroundColor: 'rgba(0, 0, 0, 0.15)' }}>
+                    <Typography variant="subtitle2" sx={{ color: '#D4AF37', fontWeight: 800, mb: 2, letterSpacing: 1, textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                      Curriculum Structure
+                    </Typography>
+                    <ProgramCurriculumView programId={p.id} />
+                  </Box>
+                )}
+              </Paper>
+            );
+          })}
+        </Stack>
+      )}
+
+      {/* User Assignment Dialog */}
+      <Dialog 
+        open={Boolean(assigningProgram)} 
+        onClose={() => setAssigningProgram(null)}
+        slotProps={{ 
+          paper: { 
+            sx: { backgroundColor: '#121217', border: '1px solid var(--emerald-mid)', minWidth: 400 } 
+          } 
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: 'var(--emerald-primary)' }}>
+          Assign Program
+        </DialogTitle>
+        <DialogContent>
+          {assigningProgram && (
+            <Stack spacing={3} sx={{ mt: 1 }}>
+              <Typography variant="body2" sx={{ color: '#B0B0B0' }}>
+                Select a user to enroll in <strong>{assigningProgram.title}</strong>:
+              </Typography>
+              <FormControl fullWidth size="small">
+                <InputLabel id="user-select-label" sx={{ color: '#888' }}>Select User</InputLabel>
+                <Select
+                  labelId="user-select-label"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  label="Select User"
+                  sx={{ backgroundColor: 'rgba(0,0,0,0.2)' }}
+                >
+                  <MenuItem value="" disabled><em>Choose User</em></MenuItem>
+                  {isLoadingUsers ? (
+                    <MenuItem disabled>Loading users...</MenuItem>
+                  ) : (
+                    allUsers?.map(user => {
+                      const activeEnroll = user.enrollments?.find(e => e.status === 'active');
+                      return (
+                        <MenuItem key={user.id} value={user.id}>
+                          {user.full_name || 'Name N/A'} ({user.email}) {activeEnroll ? `[Active: ${activeEnroll.programs?.title || 'Program'}]` : '[No Active Program]'}
+                        </MenuItem>
+                      );
+                    })
+                  )}
+                </Select>
+              </FormControl>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setAssigningProgram(null)} sx={{ color: '#B0B0B0' }}>Cancel</Button>
+          <Button 
+            variant="contained" 
+            onClick={handleConfirmAssignment}
+            disabled={!selectedUserId || enrollUserMutation.isPending}
+            sx={{ backgroundColor: 'var(--emerald-primary)', color: '#0B0B0F', fontWeight: 700 }}
+          >
+            {enrollUserMutation.isPending ? 'Enrolling...' : 'Confirm Assignment'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar 
+        open={assignSnackbar.open} 
+        autoHideDuration={6000} 
+        onClose={() => setAssignSnackbar({...assignSnackbar, open: false})}
+      >
+        <Alert onClose={() => setAssignSnackbar({...assignSnackbar, open: false})} severity={assignSnackbar.severity} sx={{ width: '100%' }}>
+          {assignSnackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+};
+
 export default ProgramBuilder;
+
 

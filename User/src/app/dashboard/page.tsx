@@ -65,11 +65,37 @@ const Dashboard = () => {
   const program = enrollment?.programs;
   const completions = enrollment?.task_completions || [];
   
-  // Calculate total tasks across all modules/lessons
-  const totalTasks = program?.modules?.reduce((acc: number, mod: any) => 
-    acc + (mod.lessons?.reduce((lAcc: number, lesson: any) => lAcc + (lesson.tasks?.length || 0), 0) || 0), 0) || 0;
+  // Build a map of taskId to title and dayNumber, and get unique tasks
+  const { totalTasks, completedCount } = React.useMemo(() => {
+    const taskMap: Record<string, { title: string; dayNumber: number }> = {};
+    const allTaskKeys = new Set<string>();
+    
+    program?.modules?.forEach((mod: any) => {
+      mod.lessons?.forEach((les: any) => {
+        les.tasks?.forEach((task: any) => {
+          taskMap[task.id] = {
+            title: task.title,
+            dayNumber: les.day_number
+          };
+          allTaskKeys.add(`${les.day_number}_${task.title}`);
+        });
+      });
+    });
+    
+    const completedKeys = new Set<string>();
+    completions.forEach((c: any) => {
+      const tInfo = taskMap[c.task_id];
+      if (tInfo) {
+        completedKeys.add(`${tInfo.dayNumber}_${tInfo.title}`);
+      }
+    });
+    
+    return {
+      totalTasks: allTaskKeys.size || 1, // Fallback to avoid division by zero
+      completedCount: completedKeys.size
+    };
+  }, [program, completions]);
   
-  const completedCount = completions.length;
   const progressPercent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
   
   // Dynamic Duration: Max day_number from lessons

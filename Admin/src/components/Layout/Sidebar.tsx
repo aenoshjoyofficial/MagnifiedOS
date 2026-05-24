@@ -21,7 +21,15 @@ import {
   CheckSquare,
   LogOut,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Brain,
+  Waves,
+  Compass,
+  Grid as GridIcon,
+  Utensils,
+  Moon,
+  Wind,
+  Award
 } from 'lucide-react';
 import { useUIStore } from '@/store/useStore';
 
@@ -31,6 +39,17 @@ const navItems = [
   { label: 'Program Builder', path: '/admin/program-builder', icon: PlusCircle },
   { label: 'Collective Sessions', path: '/admin/sessions', icon: Calendar },
   { label: 'Member Bookings', path: '/admin/bookings', icon: CheckSquare },
+];
+
+const chamberItems = [
+  { label: 'Mental Clarity', path: '/admin/chambers/mental-clarity', icon: Brain },
+  { label: 'The Frequency Field', path: '/admin/chambers/frequency-field', icon: Waves },
+  { label: 'Field Design', path: '/admin/chambers/field-design', icon: Compass },
+  { label: 'The Living Frame', path: '/admin/chambers/living-frame', icon: GridIcon },
+  { label: 'The Plate', path: '/admin/chambers/the-plate', icon: Utensils },
+  { label: 'Sleep Cocoon', path: '/admin/chambers/sleep-cocoon', icon: Moon },
+  { label: 'Breath Atelier', path: '/admin/chambers/breath-atelier', icon: Wind },
+  { label: 'The Signature', path: '/admin/chambers/the-signature', icon: Award },
 ];
 
 const Sidebar = () => {
@@ -110,6 +129,79 @@ const Sidebar = () => {
                           sx: {
                             fontWeight: isActive ? 600 : 400,
                             fontSize: '0.95rem'
+                          }
+                        }
+                      }} 
+                    />
+                  )}
+                </ListItemButton>
+              </Tooltip>
+            </ListItem>
+          );
+        })}
+      </List>
+
+      <Divider sx={{ my: 1.5, opacity: 0.05, backgroundColor: 'rgba(212, 175, 55, 0.2)' }} />
+
+      {isSidebarOpen && (
+        <Typography 
+          variant="caption" 
+          sx={{ 
+            px: 3, 
+            pt: 1, 
+            pb: 1, 
+            display: 'block', 
+            color: 'rgba(212, 175, 55, 0.4)', 
+            fontWeight: 800, 
+            letterSpacing: 1.5, 
+            textTransform: 'uppercase' 
+          }}
+        >
+          Chambers
+        </Typography>
+      )}
+
+      <List sx={{ px: 1.5 }}>
+        {chamberItems.map((item) => {
+          const isActive = pathname === item.path;
+          const Icon = item.icon;
+
+          return (
+            <ListItem key={item.path} disablePadding sx={{ display: 'block', mb: 0.5 }}>
+              <Tooltip title={!isSidebarOpen ? item.label : ''} placement="right">
+                <ListItemButton
+                  component={Link}
+                  to={item.path}
+                  sx={{
+                    minHeight: 40,
+                    justifyContent: isSidebarOpen ? 'initial' : 'center',
+                    px: 2.5,
+                    borderRadius: 2,
+                    backgroundColor: isActive ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
+                    color: isActive ? '#D4AF37' : '#B0B0B0',
+                    '&:hover': {
+                      backgroundColor: 'rgba(212, 175, 55, 0.05)',
+                    },
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 0,
+                      mr: isSidebarOpen ? 2 : 'auto',
+                      justifyContent: 'center',
+                      color: isActive ? '#D4AF37' : 'inherit',
+                    }}
+                  >
+                    <Icon size={20} />
+                  </ListItemIcon>
+                  {isSidebarOpen && (
+                    <ListItemText 
+                      primary={item.label} 
+                      slotProps={{
+                        primary: { 
+                          sx: {
+                            fontWeight: isActive ? 600 : 400,
+                            fontSize: '0.85rem'
                           }
                         }
                       }} 

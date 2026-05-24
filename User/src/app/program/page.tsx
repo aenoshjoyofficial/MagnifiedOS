@@ -64,12 +64,42 @@ const MyProgram = () => {
   const program = enrollment.programs;
   const completions = enrollment.task_completions || [];
   
+  // Create a map of task ID to its title and day number for easy lookup
+  const taskMap = React.useMemo(() => {
+    const map: Record<string, { title: string; dayNumber: number }> = {};
+    program?.modules?.forEach((mod: any) => {
+      mod.lessons?.forEach((les: any) => {
+        les.tasks?.forEach((task: any) => {
+          map[task.id] = {
+            title: task.title,
+            dayNumber: les.day_number
+          };
+        });
+      });
+    });
+    return map;
+  }, [program]);
+
+  const completedKeys = React.useMemo(() => {
+    const keys = new Set<string>();
+    completions.forEach((c: any) => {
+      const tInfo = taskMap[c.task_id];
+      if (tInfo) {
+        keys.add(`${tInfo.dayNumber}_${tInfo.title}`);
+      }
+    });
+    return keys;
+  }, [completions, taskMap]);
+
   // Logic to determine status for modules and days
   const getModuleStatus = (module: any) => {
-    const allTasks = module.lessons.flatMap((l: any) => l.tasks);
+    const allTasks = module.lessons?.flatMap((l: any) => l.tasks || []) || [];
     if (allTasks.length === 0) return 'locked';
     
-    const completedTasks = allTasks.filter((t: any) => completions.some((c: any) => c.task_id === t.id));
+    const completedTasks = allTasks.filter((t: any) => {
+      const lesson = module.lessons.find((l: any) => l.tasks?.some((tk: any) => tk.id === t.id));
+      return completedKeys.has(`${lesson?.day_number || 1}_${t.title}`);
+    });
     
     if (completedTasks.length === allTasks.length) return 'completed';
     if (completedTasks.length > 0) return 'active';
@@ -77,10 +107,10 @@ const MyProgram = () => {
   };
 
   const getDayStatus = (lesson: any) => {
-    const tasks = lesson.tasks;
+    const tasks = lesson.tasks || [];
     if (tasks.length === 0) return 'pending';
     
-    const completedTasks = tasks.filter((t: any) => completions.some((c: any) => c.task_id === t.id));
+    const completedTasks = tasks.filter((t: any) => completedKeys.has(`${lesson.day_number}_${t.title}`));
     
     if (completedTasks.length === tasks.length) return 'completed';
     return 'active';
@@ -138,7 +168,7 @@ const MyProgram = () => {
                     return (
                       <Box 
                         key={lesson.id}
-                        {...(!isLocked ? { component: Link, to: '/today' } : {})}
+                        {...(!isLocked ? { component: Link, to: `/today?day=${lesson.day_number}` } : {})}
                         sx={{ 
                           display: 'flex', 
                           alignItems: 'center', 
