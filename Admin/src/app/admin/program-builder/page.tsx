@@ -545,38 +545,39 @@ const ProgramBuilder = () => {
         </Stack>
       </Box>
 
-      <Grid container spacing={3}>
-        {/* Navigation Tabs */}
-        <Grid size={{ xs: 12, md: 3 }}>
-          <Paper sx={{ p: 1 }}>
-            <Stack spacing={0.5}>
-              {[
-                { id: 'settings', label: 'General Settings', icon: Settings },
-                { id: 'modules', label: 'Modules & Lessons', icon: GripVertical },
-                { id: 'tasks', label: 'Task Engineering', icon: Plus },
-              ].map((tab) => (
-                <Button 
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  startIcon={<tab.icon size={18} />}
-                  sx={{ 
-                    justifyContent: 'flex-start',
-                    px: 2,
-                    py: 1.5,
-                    color: activeTab === tab.id ? 'var(--emerald-primary)' : '#B0B0B0',
-                    backgroundColor: activeTab === tab.id ? 'var(--emerald-mid)' : 'transparent',
-                    '&:hover': { backgroundColor: 'var(--emerald-dark)' }
-                  }}
-                >
-                  {tab.label}
-                </Button>
-              ))}
-            </Stack>
-          </Paper>
-        </Grid>
+      {/* Navigation Tabs (Horizontal Layout) */}
+      <Box sx={{ mb: 3 }}>
+        <Paper sx={{ p: 1 }}>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+            {[
+              { id: 'settings', label: 'General Settings', icon: Settings },
+              { id: 'modules', label: 'Modules & Lessons', icon: GripVertical },
+              { id: 'tasks', label: 'Task Engineering', icon: Plus },
+            ].map((tab) => (
+              <Button 
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                startIcon={<tab.icon size={18} />}
+                sx={{ 
+                  flex: 1,
+                  minWidth: { xs: '100%', sm: 180 },
+                  justifyContent: 'center',
+                  px: 2,
+                  py: 1.5,
+                  color: activeTab === tab.id ? 'var(--emerald-primary)' : '#B0B0B0',
+                  backgroundColor: activeTab === tab.id ? 'var(--emerald-mid)' : 'transparent',
+                  '&:hover': { backgroundColor: 'var(--emerald-dark)' }
+                }}
+              >
+                {tab.label}
+              </Button>
+            ))}
+          </Stack>
+        </Paper>
+      </Box>
 
-        {/* Content Area */}
-        <Grid size={{ xs: 12, md: 9 }}>
+      {/* Content Area */}
+      <Box sx={{ width: '100%' }}>
           {/* Program Selector */}
           <Paper sx={{ p: 2, mb: 3, display: 'flex', alignItems: 'center', gap: 2, backgroundColor: 'var(--emerald-deep)', border: '1px solid var(--emerald-mid)' }}>
             <Typography variant="body2" sx={{ color: 'var(--emerald-primary)', fontWeight: 700 }}>ACTIVE PROGRAM:</Typography>
@@ -1153,8 +1154,7 @@ const ProgramBuilder = () => {
               )}
             </Paper>
           )}
-        </Grid>
-      </Grid>
+      </Box>
 
       <Snackbar 
         open={notification.open} 
