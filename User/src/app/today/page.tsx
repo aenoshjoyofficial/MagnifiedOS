@@ -25,6 +25,19 @@ import { useAuthStore } from '@/store/useStore';
 import { useMyEnrollment, useCompleteTask } from '@/lib/queries';
 import { supabase } from '@/lib/supabase';
 
+const parseRoutineFromHtml = (html: string) => {
+  try {
+    if (!html) return null;
+    const match = html.match(/<script type="application\/json" id="routine-json">([\s\S]*?)<\/script>/);
+    if (match && match[1]) {
+      return JSON.parse(match[1].trim());
+    }
+  } catch (e) {
+    console.error('Error parsing routine from HTML:', e);
+  }
+  return null;
+};
+
 const TodayPractice = () => {
   const { user } = useAuthStore();
   const [targetUserId, setTargetUserId] = React.useState<string | null>(user?.id || null);
@@ -47,6 +60,36 @@ const TodayPractice = () => {
 
   const { data: enrollment, isLoading } = useMyEnrollment(targetUserId || '');
   const completeTaskMutation = useCompleteTask();
+
+  const [hasLoadedInitial, setHasLoadedInitial] = React.useState(false);
+  const [isDaySubmitted, setIsDaySubmitted] = React.useState(false);
+  const [visibleInstructions, setVisibleInstructions] = React.useState<Record<string, boolean>>({});
+
+  const toggleInstruction = (windowName: string) => {
+    setVisibleInstructions(prev => ({
+      ...prev,
+      [windowName]: !prev[windowName]
+    }));
+  };
+
+  React.useEffect(() => {
+    if (enrollment && !hasLoadedInitial) {
+      const program = enrollment.programs;
+      const startedAt = new Date(enrollment.started_at);
+      const daysSinceStart = Math.max(1, Math.floor((new Date().getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      const allLessons = program.modules.flatMap((m: any) => m.lessons);
+      const currentLesson = allLessons[daysSinceStart - 1] || allLessons[allLessons.length - 1];
+      const tasks = currentLesson?.tasks || [];
+      const completions = enrollment.task_completions || [];
+      const completedTasks = tasks.filter((t: any) => completions.some((c: any) => c.task_id === t.id));
+      const isDayComplete = completedTasks.length === tasks.length && tasks.length > 0;
+
+      if (isDayComplete) {
+        setIsDaySubmitted(true);
+      }
+      setHasLoadedInitial(true);
+    }
+  }, [enrollment, hasLoadedInitial]);
 
   if (isLoading) {
     return (
@@ -79,24 +122,29 @@ const TodayPractice = () => {
   const completedTasks = tasks.filter((t: any) => completions.some((c: any) => c.task_id === t.id));
   const isDayComplete = completedTasks.length === tasks.length && tasks.length > 0;
 
-  const [hasLoadedInitial, setHasLoadedInitial] = React.useState(false);
-  const [isDaySubmitted, setIsDaySubmitted] = React.useState(false);
-
-  React.useEffect(() => {
-    if (enrollment && !hasLoadedInitial) {
-      if (isDayComplete) {
-        setIsDaySubmitted(true);
-      }
-      setHasLoadedInitial(true);
-    }
-  }, [enrollment, isDayComplete, hasLoadedInitial]);
-
   const handleTaskComplete = async (taskId: string) => {
     if (completions.some((c: any) => c.task_id === taskId)) return;
     
     await completeTaskMutation.mutateAsync({
       enrollmentId: enrollment.id,
       taskId: taskId
+    });
+  };
+
+  const parsedRoutine = parseRoutineFromHtml(currentLesson?.description || '');
+  
+  const getTasksForWindow = (windowName: string) => {
+    return tasks.filter((t: any) => {
+      const taskWindow = t.content?.routine_window;
+      return taskWindow && taskWindow.toLowerCase() === windowName.toLowerCase();
+    });
+  };
+
+  const getUnassignedTasks = () => {
+    const routineWindows = ['morning', 'mid-morning', 'midday', 'afternoon', 'evening', 'night'];
+    return tasks.filter((t: any) => {
+      const taskWindow = t.content?.routine_window;
+      return !taskWindow || !routineWindows.includes(taskWindow.toLowerCase());
     });
   };
 
@@ -118,24 +166,11 @@ const TodayPractice = () => {
         <Typography variant="overline" sx={{ color: '#D4AF37', fontWeight: 700, letterSpacing: 2 }}>
           DAY {daysSinceStart} • {currentLesson?.title?.toUpperCase() || 'PRACTICE'}
         </Typography>
-        <Typography variant="h3" sx={{ fontWeight: 800, mt: 0.5, mb: 2 }}>
+        <Typography variant="h3" sx={{ fontWeight: 800, mt: 0.5, mb: 3 }}>
           {currentLesson?.title || 'Daily Integration'}
         </Typography>
 
-        {currentLesson?.description && (
-          <Typography 
-            variant="body1" 
-            sx={{ 
-              color: '#B0B0B0', 
-              mb: 3,
-              lineHeight: 1.6,
-              '& ul, & ol': { pl: 3, my: 1 },
-              '& p': { my: 1 }
-            }}
-            dangerouslySetInnerHTML={{ __html: currentLesson.description }}
-          />
-        )}
-
+        {/* Daily Progress (Moved to Top) */}
         <Box sx={{ p: 2.5, borderRadius: 3, backgroundColor: 'rgba(212, 175, 55, 0.05)', border: '1px solid rgba(212, 175, 55, 0.1)' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>Daily Progress</Typography>
@@ -154,21 +189,166 @@ const TodayPractice = () => {
         </Box>
       </Box>
 
-      {/* Task List */}
-      <Stack spacing={2} sx={{ mb: 6 }}>
-        {tasks.map((task: any, index: number) => (
-          <TaskCard 
-            key={task.id} 
-            task={task} 
-            index={index} 
-            isCompleted={completions.some((c: any) => c.task_id === task.id)}
-            onComplete={() => handleTaskComplete(task.id)} 
-          />
-        ))}
-        {tasks.length === 0 && (
-          <Typography sx={{ textAlign: 'center', py: 4, color: '#666' }}>No tasks found for today.</Typography>
-        )}
-      </Stack>
+      {/* Routine Windows & Nested Tasks */}
+      {parsedRoutine ? (
+        <Stack spacing={4} sx={{ mb: 6 }}>
+          {parsedRoutine.map((item: any, idx: number) => {
+            const windowTasks = getTasksForWindow(item.window);
+            return (
+              <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {/* Simplified Left-Accent Section Header */}
+                <Box 
+                  sx={{ 
+                    borderLeft: '3px solid',
+                    borderColor: windowTasks.length > 0 ? '#D4AF37' : 'rgba(255, 255, 255, 0.1)',
+                    pl: 2.5,
+                    py: 0.5,
+                    textAlign: 'left'
+                  }}
+                >
+                  <Typography 
+                    variant="caption" 
+                    sx={{ 
+                      color: windowTasks.length > 0 ? '#D4AF37' : '#666', 
+                      fontWeight: 800, 
+                      letterSpacing: 1.5, 
+                      textTransform: 'uppercase',
+                      display: 'block'
+                    }}
+                  >
+                    {item.window}
+                  </Typography>
+                  <Typography variant="h6" sx={{ color: '#EAEAEA', fontWeight: 700, fontSize: '1.1rem', mt: 0.5 }}>
+                    {item.system}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#888', fontSize: '0.85rem', mt: 0.5 }}>
+                    Anchor: {item.anchor}
+                  </Typography>
+
+                  {item.instruction && (
+                    <Box sx={{ mt: 1 }}>
+                      <Button 
+                        onClick={() => toggleInstruction(item.window)} 
+                        sx={{ 
+                          color: '#D4AF37', 
+                          fontSize: '0.75rem', 
+                          p: 0, 
+                          minWidth: 0, 
+                          textTransform: 'none', 
+                          '&:hover': { background: 'transparent', textDecoration: 'underline' } 
+                        }}
+                      >
+                        {visibleInstructions[item.window] ? 'Hide Instructions' : 'View Instructions'}
+                      </Button>
+                      {visibleInstructions[item.window] && (
+                        <Box 
+                          sx={{ 
+                            mt: 1.5, 
+                            p: 2, 
+                            borderRadius: 2, 
+                            backgroundColor: 'rgba(255, 255, 255, 0.02)', 
+                            border: '1px dashed rgba(212, 175, 55, 0.15)', 
+                            color: '#B0B0B0', 
+                            fontSize: '0.85rem', 
+                            lineHeight: 1.5,
+                            textAlign: 'left',
+                            '& ul, & ol': { pl: 3, my: 0.5 },
+                            '& p': { my: 0.5 }
+                          }}
+                        >
+                          <div dangerouslySetInnerHTML={{ __html: item.instruction }} />
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+                </Box>
+
+                {/* Nested Tasks for this window */}
+                {windowTasks.length > 0 && (
+                  <Stack spacing={1.5} sx={{ pl: { xs: 1.5, sm: 3 } }}>
+                    {windowTasks.map((task: any) => {
+                      const globalIndex = tasks.findIndex((t: any) => t.id === task.id);
+                      return (
+                        <TaskCard 
+                          key={task.id} 
+                          task={task} 
+                          index={globalIndex} 
+                          isCompleted={completions.some((c: any) => c.task_id === task.id)}
+                          onComplete={() => handleTaskComplete(task.id)} 
+                        />
+                      );
+                    })}
+                  </Stack>
+                )}
+              </Box>
+            );
+          })}
+
+          {/* Unassigned/General Tasks */}
+          {getUnassignedTasks().length > 0 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box 
+                sx={{ 
+                  borderLeft: '3px solid rgba(255, 255, 255, 0.3)',
+                  pl: 2.5,
+                  py: 0.5,
+                  textAlign: 'left'
+                }}
+              >
+                <Typography variant="caption" sx={{ color: '#888', fontWeight: 800, fontSize: '0.75rem', letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                  General Practices
+                </Typography>
+              </Box>
+              <Stack spacing={1.5} sx={{ pl: { xs: 1.5, sm: 3 } }}>
+                {getUnassignedTasks().map((task: any) => {
+                  const globalIndex = tasks.findIndex((t: any) => t.id === task.id);
+                  return (
+                    <TaskCard 
+                      key={task.id} 
+                      task={task} 
+                      index={globalIndex} 
+                      isCompleted={completions.some((c: any) => c.task_id === task.id)}
+                      onComplete={() => handleTaskComplete(task.id)} 
+                    />
+                  );
+                })}
+              </Stack>
+            </Box>
+          )}
+        </Stack>
+      ) : (
+        /* Legacy fallback rendering */
+        <>
+          {currentLesson?.description && (
+            <Typography 
+              variant="body1" 
+              sx={{ 
+                color: '#B0B0B0', 
+                mb: 4,
+                lineHeight: 1.6,
+                '& ul, & ol': { pl: 3, my: 1 },
+                '& p': { my: 1 }
+              }}
+              dangerouslySetInnerHTML={{ __html: currentLesson.description }}
+            />
+          )}
+
+          <Stack spacing={2} sx={{ mb: 6 }}>
+            {tasks.map((task: any, index: number) => (
+              <TaskCard 
+                key={task.id} 
+                task={task} 
+                index={index} 
+                isCompleted={completions.some((c: any) => c.task_id === task.id)}
+                onComplete={() => handleTaskComplete(task.id)} 
+              />
+            ))}
+            {tasks.length === 0 && (
+              <Typography sx={{ textAlign: 'center', py: 4, color: '#666' }}>No tasks found for today.</Typography>
+            )}
+          </Stack>
+        </>
+      )}
 
       {/* Global Actions */}
       <Box sx={{ textAlign: 'center' }}>

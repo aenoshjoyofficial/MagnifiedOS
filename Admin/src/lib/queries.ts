@@ -29,6 +29,7 @@ export interface Lesson {
   title: string;
   day_number: number;
   unlock_day: number;
+  description?: string;
   created_at?: string;
   tasks?: Task[];
 }

@@ -55,6 +55,53 @@ import {
   useDeleteProgram
 } from '@/lib/queries';
 
+const generateRoutineHtml = (routine: Array<{ window: string, system: string, anchor: string, instruction: string }>) => {
+  let cardsHtml = '';
+  routine.forEach(item => {
+    let instructionHtml = '';
+    if (item.instruction) {
+      instructionHtml = `
+      <div style="margin-top:12px; padding-top:12px; border-top:1px dashed rgba(212,175,55,0.15); color:#EAEAEA; font-size:0.85rem; line-height:1.5; text-align:left;">
+        <div style="color:#D4AF37; font-weight:700; font-size:0.75rem; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px;">Process Instructions:</div>
+        <div class="routine-instruction-content">${item.instruction}</div>
+      </div>`;
+    }
+
+    cardsHtml += `
+    <div style="background:rgba(212,175,55,0.02); border:1px solid rgba(212,175,55,0.08); border-radius:12px; padding:16px; margin-bottom:12px; display:flex; flex-direction:column; gap:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:#D4AF37; font-weight:800; font-size:0.75rem; letter-spacing:1px; text-transform:uppercase;">${item.window}</span>
+        <span style="color:#666; font-size:0.75rem; font-weight:600;">Routine Window</span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
+        <div style="color:#EAEAEA; font-weight:700; font-size:1rem;">${item.system}</div>
+        <div style="color:#B0B0B0; font-size:0.85rem; line-height:1.4;">${item.anchor}</div>
+      </div>
+      ${instructionHtml}
+    </div>`;
+  });
+
+  const jsonStr = JSON.stringify(routine);
+  return `
+  <div class="day-routine-container" style="margin-top:16px; margin-bottom:16px;">
+    ${cardsHtml}
+    <script type="application/json" id="routine-json">${jsonStr}</script>
+  </div>`;
+};
+
+const parseRoutineFromHtml = (html: string) => {
+  try {
+    if (!html) return null;
+    const match = html.match(/<script type="application\/json" id="routine-json">([\s\S]*?)<\/script>/);
+    if (match && match[1]) {
+      return JSON.parse(match[1].trim());
+    }
+  } catch (e) {
+    console.error('Error parsing routine from HTML:', e);
+  }
+  return null;
+};
+
 const ProgramBuilder = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -253,11 +300,22 @@ const ProgramBuilder = () => {
   const handleAddLesson = async (moduleId: string) => {
     try {
       const module = localModules.find(m => m.id === moduleId);
+      const defaultRoutine = [
+        { window: 'Morning', system: 'Mental Clarity + Hydration + Movement', anchor: 'Warm water · 8 breaths · cold rinse · light mobility', instruction: '' },
+        { window: 'Mid-Morning', system: 'Activation Sequence', anchor: 'Tai Chi flow · joint articulation · nasal walking', instruction: '' },
+        { window: 'Midday', system: 'Strength + Digestion', anchor: 'Largest meal · 10 breaths before eating · slow chewing', instruction: '' },
+        { window: 'Afternoon', system: 'Nervous-System Pacing', anchor: 'Midday Reset audio · brown noise · 8-minute breath', instruction: '' },
+        { window: 'Evening', system: 'Parasympathetic Descent', anchor: 'Light dinner before 7:30pm · 6 Hz theta · alternate nostril', instruction: '' },
+        { window: 'Night', system: 'Sleep Cocoon', anchor: '60-minute descent · delta · darkness · nasal only', instruction: '' }
+      ];
+      const defaultHtml = generateRoutineHtml(defaultRoutine);
+
       const newLesson = await saveLessonMutation.mutateAsync({
         module_id: moduleId,
         title: 'New Lesson',
         day_number: (module?.lessons?.length || 0) + 1,
-        unlock_day: (module?.lessons?.length || 0) + 1
+        unlock_day: (module?.lessons?.length || 0) + 1,
+        description: defaultHtml
       });
       
       setLocalModules(prev => prev.map(m => 
@@ -400,6 +458,23 @@ const ProgramBuilder = () => {
         l.id === lessonId ? {
           ...l,
           tasks: l.tasks?.map((t: any) => t.id === taskId ? { ...t, title } : t)
+        } : l
+      )
+    })));
+  };
+
+  const updateTaskWindow = (lessonId: string, taskId: string, windowName: string) => {
+    setLocalModules(prev => prev.map(m => ({
+      ...m,
+      lessons: m.lessons?.map((l: any) => 
+        l.id === lessonId ? {
+          ...l,
+          tasks: l.tasks?.map((t: any) => 
+            t.id === taskId ? { 
+              ...t, 
+              content: { ...t.content, routine_window: windowName } 
+            } : t
+          )
         } : l
       )
     })));
@@ -798,20 +873,80 @@ const ProgramBuilder = () => {
                                   </Box>
 
                                   {/* Lesson Description Editor */}
-                                  {isLessonExpanded && (
-                                    <Box sx={{ px: 2, pb: 2, pt: 0.5, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                                      <Typography variant="subtitle2" sx={{ mb: 1, color: '#B0B0B0', fontWeight: 700, fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <DescriptionIcon fontSize="inherit" /> LESSON DESCRIPTION (RICH TEXT)
-                                      </Typography>
-                                      <RichTextEditor
-                                        value={lesson.description || ''}
-                                        onChange={(val) => updateLessonDescription(module.id, lesson.id, val)}
-                                        onBlur={() => persistLesson(lesson)}
-                                        maxLength={1000}
-                                        placeholder="Add description or context for this day's practice..."
-                                      />
-                                    </Box>
-                                  )}
+                                  {isLessonExpanded && (() => {
+                                    const parsedRoutine = parseRoutineFromHtml(lesson.description || '') || [
+                                      { window: 'Morning', system: 'Mental Clarity + Hydration + Movement', anchor: 'Warm water · 8 breaths · cold rinse · light mobility', instruction: '' },
+                                      { window: 'Mid-Morning', system: 'Activation Sequence', anchor: 'Tai Chi flow · joint articulation · nasal walking', instruction: '' },
+                                      { window: 'Midday', system: 'Strength + Digestion', anchor: 'Largest meal · 10 breaths before eating · slow chewing', instruction: '' },
+                                      { window: 'Afternoon', system: 'Nervous-System Pacing', anchor: 'Midday Reset audio · brown noise · 8-minute breath', instruction: '' },
+                                      { window: 'Evening', system: 'Parasympathetic Descent', anchor: 'Light dinner before 7:30pm · 6 Hz theta · alternate nostril', instruction: '' },
+                                      { window: 'Night', system: 'Sleep Cocoon', anchor: '60-minute descent · delta · darkness · nasal only', instruction: '' }
+                                    ];
+                                    return (
+                                      <Box sx={{ px: 2, pb: 2, pt: 0.5, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                        <Typography variant="subtitle2" sx={{ mb: 2, color: '#B0B0B0', fontWeight: 700, fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                          <DescriptionIcon fontSize="inherit" /> STRUCTURED DAY ROUTINE BUILDER
+                                        </Typography>
+
+                                        <Stack spacing={2} sx={{ mt: 1 }}>
+                                          {parsedRoutine.map((item: any, idx: number) => (
+                                            <Paper key={idx} sx={{ p: 2.5, backgroundColor: 'rgba(255, 255, 255, 0.01)', border: '1px solid rgba(212, 175, 55, 0.1)', borderRadius: 2 }}>
+                                              <Typography variant="subtitle2" sx={{ color: '#D4AF37', fontWeight: 800, mb: 2, fontSize: '0.75rem', letterSpacing: 1, textTransform: 'uppercase' }}>
+                                                {item.window}
+                                              </Typography>
+                                              <Grid container spacing={2}>
+                                                <Grid size={{ xs: 12, md: 3 }}>
+                                                  <TextField
+                                                    fullWidth
+                                                    size="small"
+                                                    label="System Focus"
+                                                    value={item.system || ''}
+                                                    onChange={(e) => {
+                                                      const updated = [...parsedRoutine];
+                                                      updated[idx].system = e.target.value;
+                                                      const newHtml = generateRoutineHtml(updated);
+                                                      updateLessonDescription(module.id, lesson.id, newHtml);
+                                                    }}
+                                                    onBlur={() => persistLesson({ ...lesson, description: generateRoutineHtml(parsedRoutine) })}
+                                                  />
+                                                </Grid>
+                                                <Grid size={{ xs: 12, md: 4 }}>
+                                                  <TextField
+                                                    fullWidth
+                                                    size="small"
+                                                    label="Anchor Action / Practice"
+                                                    value={item.anchor || ''}
+                                                    onChange={(e) => {
+                                                      const updated = [...parsedRoutine];
+                                                      updated[idx].anchor = e.target.value;
+                                                      const newHtml = generateRoutineHtml(updated);
+                                                      updateLessonDescription(module.id, lesson.id, newHtml);
+                                                    }}
+                                                    onBlur={() => persistLesson({ ...lesson, description: generateRoutineHtml(parsedRoutine) })}
+                                                  />
+                                                </Grid>
+                                                <Grid size={{ xs: 12, md: 5 }}>
+                                                  <Typography variant="caption" sx={{ color: '#B0B0B0', fontWeight: 700, display: 'block', mb: 0.5 }}>Process Instructions</Typography>
+                                                  <RichTextEditor
+                                                    value={item.instruction || ''}
+                                                    onChange={(val) => {
+                                                      const updated = [...parsedRoutine];
+                                                      updated[idx].instruction = val;
+                                                      const newHtml = generateRoutineHtml(updated);
+                                                      updateLessonDescription(module.id, lesson.id, newHtml);
+                                                    }}
+                                                    onBlur={() => persistLesson({ ...lesson, description: generateRoutineHtml(parsedRoutine) })}
+                                                    placeholder="Process instructions (e.g. step-by-step guidance)..."
+                                                    maxLength={1000}
+                                                  />
+                                                </Grid>
+                                              </Grid>
+                                            </Paper>
+                                          ))}
+                                        </Stack>
+                                      </Box>
+                                    );
+                                  })()}
                                 </Box>
                               );
                             })}
@@ -925,6 +1060,37 @@ const ProgramBuilder = () => {
                                   />
 
                                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                    <Select
+                                      size="small"
+                                      value={task.content?.routine_window || ''}
+                                      onChange={async (e) => {
+                                        const windowName = e.target.value;
+                                        updateTaskWindow(lesson.id, task.id, windowName);
+                                        const updatedTask = {
+                                          ...task,
+                                          content: { ...task.content, routine_window: windowName }
+                                        };
+                                        await persistTask(updatedTask);
+                                      }}
+                                      displayEmpty
+                                      sx={{ 
+                                        minWidth: 120, 
+                                        height: 28, 
+                                        fontSize: '0.75rem',
+                                        color: '#B0B0B0',
+                                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.08)' },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--emerald-primary)' }
+                                      }}
+                                    >
+                                      <MenuItem value="" sx={{ fontSize: '0.75rem' }}><em>General Task</em></MenuItem>
+                                      <MenuItem value="Morning" sx={{ fontSize: '0.75rem' }}>Morning</MenuItem>
+                                      <MenuItem value="Mid-Morning" sx={{ fontSize: '0.75rem' }}>Mid-Morning</MenuItem>
+                                      <MenuItem value="Midday" sx={{ fontSize: '0.75rem' }}>Midday</MenuItem>
+                                      <MenuItem value="Afternoon" sx={{ fontSize: '0.75rem' }}>Afternoon</MenuItem>
+                                      <MenuItem value="Evening" sx={{ fontSize: '0.75rem' }}>Evening</MenuItem>
+                                      <MenuItem value="Night" sx={{ fontSize: '0.75rem' }}>Night</MenuItem>
+                                    </Select>
+
                                     {(task.type === 'audio' || task.type === 'video') && (
                                       <Box>
                                         <input
