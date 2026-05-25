@@ -54,14 +54,6 @@ const Dashboard = () => {
     return 'Evening';
   };
 
-  if (isLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-        <CircularProgress sx={{ color: '#D4AF37' }} />
-      </Box>
-    );
-  }
-
   const program = enrollment?.programs;
   const completions = enrollment?.task_completions || [];
   
@@ -95,6 +87,14 @@ const Dashboard = () => {
       completedCount: completedKeys.size
     };
   }, [program, completions]);
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+        <CircularProgress sx={{ color: '#D4AF37' }} />
+      </Box>
+    );
+  }
   
   const progressPercent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
   
