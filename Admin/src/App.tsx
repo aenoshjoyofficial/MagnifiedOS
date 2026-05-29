@@ -23,10 +23,10 @@ const App = () => {
       <LayoutWrapper>
         <Routes>
           {/* Public Routes */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/admin/login" element={<LoginPage />} />
+          <Route path="/admin/signup" element={<SignupPage />} />
+          <Route path="/admin/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/admin/reset-password" element={<ResetPasswordPage />} />
 
           {/* Protected Routes */}
           <Route path="/" element={<AuthGuard><Navigate to="/admin" replace /></AuthGuard>} />

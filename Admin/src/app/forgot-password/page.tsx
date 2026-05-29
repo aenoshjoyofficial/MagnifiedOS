@@ -32,7 +32,7 @@ const AdminForgotPassword = () => {
 
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/admin/reset-password`,
       });
 
       if (resetError) throw resetError;
@@ -102,7 +102,7 @@ const AdminForgotPassword = () => {
             </Alert>
             <Button
               component={Link}
-              to="/login"
+              to="/admin/login"
               fullWidth
               variant="outlined"
               startIcon={<ArrowLeft size={18} />}
@@ -161,7 +161,7 @@ const AdminForgotPassword = () => {
               <Box sx={{ textAlign: 'center' }}>
                 <MuiLink 
                   component={Link} 
-                  to="/login" 
+                  to="/admin/login" 
                   sx={{ 
                     color: '#666', 
                     fontSize: '0.875rem', 

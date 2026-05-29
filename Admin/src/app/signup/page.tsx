@@ -99,7 +99,7 @@ const AdminSignup = () => {
           </Box>
           <Button 
             component={RouterLink} 
-            to="/login"
+            to="/admin/login"
             fullWidth 
             variant="outlined"
             sx={{ borderColor: 'rgba(255, 255, 255, 0.1)', color: '#B0B0B0' }}
@@ -226,7 +226,7 @@ const AdminSignup = () => {
         <Box sx={{ mt: 4, pt: 3, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
           <Typography variant="body2" sx={{ color: '#666' }}>
             Already have access? {' '}
-            <Link component={RouterLink} to="/login" sx={{ color: '#D4AF37', fontWeight: 700, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+            <Link component={RouterLink} to="/admin/login" sx={{ color: '#D4AF37', fontWeight: 700, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
               Login here
             </Link>
           </Typography>

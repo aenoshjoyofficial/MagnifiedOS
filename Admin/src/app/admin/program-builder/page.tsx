@@ -83,6 +83,7 @@ import {
   getDayTheme,
   matchChamberKey
 } from '@/lib/chambersData';
+import { ProgramImportModal } from '@/components/program-builder/ProgramImportModal';
 
 const parseRoutineFromHtml = (html: string) => {
   try {
@@ -101,6 +102,7 @@ const ProgramBuilder = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('settings'); 
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const saveProgramMutation = useSaveProgram();
   const saveModuleMutation = useSaveModule();
   const saveLessonMutation = useSaveLesson();
@@ -1060,6 +1062,32 @@ const ProgramBuilder = () => {
     }
   };
 
+  const handleImportSuccess = async (compiled: any) => {
+    try {
+      const savedProgram = await handleSave({
+        title: compiled.metadata.title,
+        description: compiled.metadata.description,
+        duration_days: compiled.metadata.duration_days
+      });
+      
+      if (savedProgram) {
+        setActiveTab('modules');
+        setNotification({ 
+          open: true, 
+          message: 'Program imported successfully! Click "Sync All Tasks & Routines" to publish lessons and tasks.', 
+          severity: 'success' 
+        });
+      }
+    } catch (err: any) {
+      console.error('Import save failed:', err);
+      setNotification({ 
+        open: true, 
+        message: `Import succeeded but failed to save program settings: ${err.message || err}`, 
+        severity: 'error' 
+      });
+    }
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
@@ -1144,6 +1172,19 @@ const ProgramBuilder = () => {
                 ))}
               </Select>
             </FormControl>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => setIsImportOpen(true)}
+              startIcon={<Upload size={14} />}
+              sx={{ 
+                color: 'var(--emerald-primary)',
+                borderColor: 'var(--emerald-mid)',
+                '&:hover': { borderColor: 'var(--emerald-light)', backgroundColor: 'var(--emerald-dark)' }
+              }}
+            >
+              Import Program
+            </Button>
             {programId && (
               <Stack direction="row" spacing={2} sx={{ ml: 'auto', alignItems: 'center' }}>
                 {localModules?.length === 0 && (
@@ -1851,6 +1892,13 @@ const ProgramBuilder = () => {
             <CreatedProgramTab />
           )}
       </Box>
+
+      <ProgramImportModal 
+        open={isImportOpen} 
+        onClose={() => setIsImportOpen(false)} 
+        programId={programId} 
+        onImportSuccess={handleImportSuccess} 
+      />
 
       <Snackbar 
         open={notification.open} 

@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 3004,
   },
   optimizeDeps: {
     include: [
@@ -25,6 +25,8 @@ export default defineConfig({
     ],
   },
   build: {
+    outDir: '../dist',
+    emptyOutDir: true,
     sourcemap: false,
     rollupOptions: {
       output: {

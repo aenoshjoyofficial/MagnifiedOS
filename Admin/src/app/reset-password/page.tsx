@@ -46,7 +46,7 @@ const AdminResetPassword = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         if (!hash.includes('access_token')) {
-          navigate('/login');
+          navigate('/admin/login');
         }
       }
     };
@@ -142,7 +142,7 @@ const AdminResetPassword = () => {
               <Button
                 fullWidth
                 variant="outlined"
-                onClick={() => navigate('/forgot-password')}
+                onClick={() => navigate('/admin/forgot-password')}
                 sx={{ 
                   mt: 2, 
                   borderColor: '#D4AF37', 

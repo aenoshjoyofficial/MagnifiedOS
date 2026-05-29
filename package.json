@@ -1,8 +1,23 @@
 {
   "name": "magnified-existence-os-root",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "npm run build --prefix User && npm run build --prefix Admin",
-    "install-all": "npm install --prefix User && npm install --prefix Admin"
+    "sync-env": "node scripts/sync-env.js",
+    "build": "npm run sync-env && npm run build --prefix User && npm run build --prefix Admin",
+    "install-all": "npm install && npm install --prefix User && npm install --prefix Admin",
+    "dev": "concurrently \"npm run dev --prefix User\" \"npm run dev --prefix Admin\"",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "compression": "^1.7.4",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }

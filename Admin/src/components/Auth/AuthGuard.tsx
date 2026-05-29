@@ -21,14 +21,14 @@ export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
   }
 
   // Allow access to public routes
-  const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password'];
+  const PUBLIC_ROUTES = ['/admin/login', '/admin/signup', '/admin/forgot-password', '/admin/reset-password'];
   if (PUBLIC_ROUTES.includes(location.pathname)) {
     return <>{children}</>;
   }
 
   // Redirect to login ONLY if loading is finished and no user exists
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/admin/login" state={{ from: location }} replace />;
   }
 
   // If user exists but profile doesn't (and we aren't loading), we should probably wait or try to fetch
@@ -47,7 +47,7 @@ export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
         <ShieldAlert size={64} color="#f44336" style={{ marginBottom: 24 }} />
         <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>Access Denied</Typography>
         <Typography sx={{ color: '#B0B0B0', mb: 4 }}>You do not have administrative privileges to access this area.</Typography>
-        <Button variant="contained" component={Link} to="/login" sx={{ backgroundColor: '#D4AF37', color: '#0B0B0F' }}>Back to Login</Button>
+        <Button variant="contained" component={Link} to="/admin/login" sx={{ backgroundColor: '#D4AF37', color: '#0B0B0F' }}>Back to Login</Button>
       </Box>
     );
   }
