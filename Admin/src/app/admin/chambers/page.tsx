@@ -1,727 +1,502 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { 
   Box, 
-  Typography, 
   Paper, 
+  Typography, 
   Button, 
-  Stack, 
-  FormControl, 
+  TextField, 
   Select, 
   MenuItem, 
-  TextField, 
+  FormControl, 
+  InputLabel, 
+  CircularProgress, 
+  Divider, 
   IconButton, 
-  Divider,
-  InputLabel,
-  CircularProgress
+  Stack, 
+  Grid
 } from '@mui/material';
 import { 
-  Brain, 
-  Waves, 
-  Compass, 
-  Grid as GridIcon, 
-  Utensils, 
-  Moon, 
-  Wind, 
-  Award,
-  Cpu,
-  ArrowLeft,
-  Plus,
-  Trash2,
-  Save,
-  CheckCircle,
+  ArrowLeft, 
+  Plus, 
+  Trash2, 
+  CheckSquare, 
+  PlayCircle, 
+  Mic, 
   FileText,
-  Upload,
-  Link as LinkIcon,
-  Music,
-  Video,
-  Image as ImageIcon
+  Brain,
+  Waves,
+  Compass,
+  Grid as GridIcon,
+  Utensils,
+  Moon,
+  Wind,
+  Award,
+  Upload
 } from 'lucide-react';
 import { 
-  CHAMBERS_INFO, 
-  DEFAULT_CHAMBER_SCRIPTS, 
-  WEEK_THEMES, 
-  CHAMBER_KEYS,
-  ChamberScript,
-  ChamberStep,
-  getChamberScriptForProgram,
-  getCombinedStepsForDay,
-  getChamberWindow,
-  generateRoutineHtml,
-  normalizeScript,
-  getDayOfWeekLabel,
-  getDayTheme,
-  saveDayTheme,
-  matchChamberKey
-} from '@/lib/chambersData';
-import { useUploadAsset, usePrograms, useProgramDetails, useSaveLesson, useSaveTask } from '@/lib/queries';
+  usePrograms, 
+  useProgramDetails, 
+  useSaveModule, 
+  useSaveLesson, 
+  useSaveTask, 
+  useDeleteTask,
+  useUploadAsset
+} from '@/lib/queries';
+import { CHAMBERS_INFO, matchChamberKey } from '@/lib/chambersData';
 
-const CHAMBER_ICONS: Record<string, any> = {
-  'mental-clarity': Brain,
-  'frequency-field': Waves,
-  'field-design': Compass,
-  'living-frame': GridIcon,
-  'the-plate': Utensils,
-  'sleep-cocoon': Moon,
-  'breath-atelier': Wind,
-  'the-signature': Award,
+// Map chamber ID to its visual icon
+const getChamberIcon = (chamberId: string) => {
+  switch (chamberId) {
+    case 'mental-clarity': return <Brain size={28} />;
+    case 'frequency-field': return <Waves size={28} />;
+    case 'field-design': return <Compass size={28} />;
+    case 'living-frame': return <GridIcon size={28} />;
+    case 'the-plate': return <Utensils size={28} />;
+    case 'sleep-cocoon': return <Moon size={28} />;
+    case 'breath-atelier': return <Wind size={28} />;
+    case 'the-signature': return <Award size={28} />;
+    default: return <Brain size={28} />;
+  }
 };
 
 const ChamberPage = () => {
-  const navigate = useNavigate();
-  const { chamberId } = useParams<{ chamberId: string }>();
-  const activeChamberId = chamberId ? chamberId.toLowerCase() : '';
-  const chamber = CHAMBERS_INFO[activeChamberId as keyof typeof CHAMBERS_INFO];
-  
+  const { chamberId = 'mental-clarity' } = useParams<{ chamberId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const urlProgramId = searchParams.get('programId');
-  const urlDay = searchParams.get('day');
-  const selectedDay = urlDay ? parseInt(urlDay, 10) : 1;
   
-  const [programId, setProgramId] = useState<string | null>(urlProgramId);
-  const [scriptData, setScriptData] = useState<ChamberScript>({
-    title: '',
-    when: '',
-    duration: '',
-    steps: [],
-    directive: ''
-  });
-  
-  const [newStepText, setNewStepText] = useState('');
-  const [isSaved, setIsSaved] = useState(false);
-  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+  // Extract initial selections from URL parameters
+  const [selectedProgramId, setSelectedProgramId] = useState<string>(searchParams.get('programId') || '');
+  const [dayNumber, setDayNumber] = useState<number>(Number(searchParams.get('day')) || 1);
 
-  const [dayThemeInput, setDayThemeInput] = useState('');
-  const [dayThemes, setDayThemes] = useState<Record<number, string>>({});
+  // Task creation form state
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskType, setTaskType] = useState<'text' | 'audio' | 'video' | 'image' | 'pdf'>('text');
+  const [taskDescription, setTaskDescription] = useState('');
+  const [contentUrl, setContentUrl] = useState('');
 
-  const { data: allPrograms } = usePrograms();
-  const { data: programDetails } = useProgramDetails(programId || '');
-  const uploadAssetMutation = useUploadAsset();
+  // Placeholders mapping based on task type
+  const placeholders = {
+    text: {
+      title: "e.g. Daily Mindset Focus",
+      url: "e.g. https://example.com/mindset-details (Optional)",
+      description: "e.g. Read the guidelines and take 3 deep breaths..."
+    },
+    audio: {
+      title: "e.g. Theta Wave Meditation",
+      url: "e.g. https://example.com/audio/meditation.mp3",
+      description: "e.g. Listen with headphones in a quiet room..."
+    },
+    video: {
+      title: "e.g. Spinal Decompression Routine",
+      url: "e.g. https://example.com/videos/spine-flow.mp4",
+      description: "e.g. Follow the structural form shown in the video..."
+    },
+    image: {
+      title: "e.g. Morning Joint Articulation Guide",
+      url: "e.g. https://example.com/images/joints-routine.png",
+      description: "e.g. Complete 10 reps of each joint movement shown in the image..."
+    },
+    pdf: {
+      title: "e.g. Weekly Nutrition Blueprint",
+      url: "e.g. https://example.com/guides/nutrition.pdf",
+      description: "e.g. Refer to the attached guide for detailed food recipes..."
+    }
+  };
+
+  // Fetch queries & mutations
+  const { data: programs = [], isLoading: isLoadingPrograms } = usePrograms();
+  const { data: programDetails, isLoading: isLoadingDetails } = useProgramDetails(selectedProgramId);
+  const saveModuleMutation = useSaveModule();
   const saveLessonMutation = useSaveLesson();
   const saveTaskMutation = useSaveTask();
+  const deleteTaskMutation = useDeleteTask();
+  const uploadAssetMutation = useUploadAsset();
+  const [isUploading, setIsUploading] = useState(false);
 
-  const activeProgram = allPrograms?.find(p => p.id === programId);
-  const durationDays = activeProgram?.duration_days || 30;
+  // Handle local file uploads
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  // Sync programId with searchParams
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (programId) {
-      params.set('programId', programId);
-    } else {
-      params.delete('programId');
-    }
-    setSearchParams(params, { replace: true });
-  }, [programId, searchParams, setSearchParams]);
-
-  // Load script for selected chamber, day and program scope
-  useEffect(() => {
-    if (!activeChamberId) return;
-    const script = getChamberScriptForProgram(programId, activeChamberId, selectedDay);
-    setScriptData(script);
-    setIsSaved(false);
-  }, [activeChamberId, selectedDay, programId]);
-
-  // Sync day theme input and dayThemes dictionary
-  useEffect(() => {
-    setDayThemeInput(getDayTheme(programId, selectedDay));
-    
-    const themes: Record<number, string> = {};
-    for (let d = 1; d <= durationDays; d++) {
-      themes[d] = getDayTheme(programId, d);
-    }
-    setDayThemes(themes);
-  }, [selectedDay, programId, durationDays]);
-
-  const handleDayThemeChange = (newTheme: string) => {
-    setDayThemeInput(newTheme);
-    saveDayTheme(programId, selectedDay, newTheme);
-    setDayThemes(prev => ({ ...prev, [selectedDay]: newTheme }));
-  };
-
-  const loadDefault = () => {
-    const chamberDefaults = DEFAULT_CHAMBER_SCRIPTS[activeChamberId];
-    const weekDayNum = ((selectedDay - 1) % 7) + 1;
-    if (chamberDefaults && chamberDefaults[weekDayNum]) {
-      setScriptData(normalizeScript(chamberDefaults[weekDayNum], activeChamberId, selectedDay, programId));
-    } else {
-      setScriptData({
-        title: chamber ? `${chamber.name} - Day ${selectedDay}` : `Day ${selectedDay}`,
-        when: 'Varies',
-        duration: 'Varies',
-        steps: [],
-        directive: 'Set the direction for this day.'
-      });
-    }
-  };
-
-  if (!chamber) {
-    return (
-      <Box sx={{ py: 8, textAlign: 'center' }}>
-        <Typography variant="h5" sx={{ mb: 2 }}>Chamber Not Found</Typography>
-        <Button component={Link} to="/admin" variant="outlined" startIcon={<ArrowLeft size={16} />} sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}>
-          Back to command center
-        </Button>
-      </Box>
-    );
-  }
-
-  const Icon = CHAMBER_ICONS[activeChamberId] || Cpu;
-
-  const syncDatabaseForDay = async (targetDay: number) => {
-    if (!programId || !programDetails?.modules) return;
-
+    setIsUploading(true);
     try {
-      for (const module of programDetails.modules) {
-        const moduleChamberKey = matchChamberKey(module.title);
-        if (!moduleChamberKey) continue;
-
-        const lesson = module.lessons?.find((l: any) => l.day_number === targetDay);
-        if (!lesson) continue;
-
-        // 1. Recompile and update the routine description
-        const formatStepsHtml = (s: ChamberScript) => {
-          let html = `<strong>When:</strong> ${s.when || 'Varies'} | <strong>Duration:</strong> ${s.duration || 'Varies'}<br/><br/>`;
-          if (s.steps && s.steps.length > 0) {
-            html += '<strong>Steps:</strong><ul>';
-            s.steps.forEach((step: ChamberStep) => {
-              let assetLink = '';
-              if (step.contentUrl) {
-                assetLink = ` (<a href="${step.contentUrl}" target="_blank" style="color:#D4AF37;text-decoration:underline;">View Asset</a>)`;
-              }
-              html += `<li>[${step.type.toUpperCase()}] ${step.title}${assetLink}</li>`;
-            });
-            html += '</ul>';
-          }
-          if (s.directive) {
-            html += `<br/><strong>DIRECTIVE:</strong><br/><em>${s.directive}</em>`;
-          }
-          return html;
-        };
-
-        const routineData: any[] = [];
-        CHAMBER_KEYS.forEach(ck => {
-          const script = getChamberScriptForProgram(programId, ck, targetDay);
-          if ((script.steps && script.steps.length > 0) || script.directive) {
-            const info = CHAMBERS_INFO[ck as keyof typeof CHAMBERS_INFO];
-            const chamberName = info ? info.name : ck.toUpperCase();
-            const defaultAnchor = info ? (info as any).defaultAnchor : 'Varies';
-            const window = getChamberWindow(ck, script.when);
-            const chamberIndex = CHAMBER_KEYS.indexOf(ck as any);
-
-            routineData.push({
-              window,
-              system: chamberName,
-              anchor: script.duration || defaultAnchor || 'Varies',
-              instruction: formatStepsHtml(script),
-              chamberIndex
-            });
-          }
-        });
-
-        const orderMap: Record<string, number> = {
-          'Morning': 1,
-          'Mid-Morning': 2,
-          'Midday': 3,
-          'Afternoon': 4,
-          'Evening': 5,
-          'Night': 6
-        };
-
-        routineData.sort((a, b) => {
-          const orderA = orderMap[a.window] || 99;
-          const orderB = orderMap[b.window] || 99;
-          if (orderA !== orderB) return orderA - orderB;
-          return a.chamberIndex - b.chamberIndex;
-        });
-
-        const cleanRoutineData = routineData.map(({ window, system, anchor, instruction }) => ({
-          window,
-          system,
-          anchor,
-          instruction
-        }));
-
-        const newDescription = generateRoutineHtml(cleanRoutineData);
-        
-        await saveLessonMutation.mutateAsync({
-          id: lesson.id,
-          module_id: module.id,
-          title: lesson.title,
-          day_number: lesson.day_number,
-          unlock_day: lesson.unlock_day,
-          description: newDescription
-        });
-
-        // 2. Sync combined tasks
-        const steps = getCombinedStepsForDay(programId, targetDay);
-        if (steps.length > 0) {
-          const existingTasks = lesson.tasks || [];
-          const updatedTasksList = [...existingTasks];
-
-          for (let sIdx = 0; sIdx < steps.length; sIdx++) {
-            const step = steps[sIdx];
-            const existingTaskIndex = updatedTasksList.findIndex(t => t.title === step.title);
-
-            let mappedType: 'checklist' | 'audio' | 'video' | 'text' = 'text';
-            if (step.type === 'audio') mappedType = 'audio';
-            else if (step.type === 'video') mappedType = 'video';
-            else mappedType = 'text';
-
-            const targetContent = {
-              routine_window: step.routineWindow,
-              url: step.contentUrl || '',
-              text: step.textContent || ''
-            };
-
-            if (existingTaskIndex >= 0) {
-              const existingTask = updatedTasksList[existingTaskIndex];
-              const contentDiffers = JSON.stringify(existingTask.content || {}) !== JSON.stringify(targetContent) || existingTask.type !== mappedType;
-
-              if (contentDiffers) {
-                const updatedTask = {
-                  ...existingTask,
-                  type: mappedType,
-                  content: targetContent
-                };
-                await saveTaskMutation.mutateAsync(updatedTask);
-              }
-            } else {
-              await saveTaskMutation.mutateAsync({
-                lesson_id: lesson.id,
-                title: step.title,
-                type: mappedType,
-                order_index: sIdx,
-                content: targetContent
-              });
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error auto-syncing day to database:', err);
-    }
-  };
-
-  const handleSave = async () => {
-    const storageKey = programId 
-      ? `program_${programId}_chamber_script_${activeChamberId}_day${selectedDay}`
-      : `chamber_script_${activeChamberId}_day${selectedDay}`;
-    localStorage.setItem(storageKey, JSON.stringify(scriptData));
-    
-    // Auto-sync database in background when saved
-    await syncDatabaseForDay(selectedDay);
-
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
-  };
-
-  const handleAddStep = () => {
-    if (!newStepText.trim()) return;
-    setScriptData(prev => ({
-      ...prev,
-      steps: [...prev.steps, { title: newStepText.trim(), type: 'text', textContent: '' }]
-    }));
-    setNewStepText('');
-  };
-
-  const handleRemoveStep = (idx: number) => {
-    setScriptData(prev => ({
-      ...prev,
-      steps: prev.steps.filter((_, i) => i !== idx)
-    }));
-  };
-
-  const handleUpdateStepTitle = (idx: number, title: string) => {
-    setScriptData(prev => {
-      const updatedSteps = [...prev.steps];
-      updatedSteps[idx] = { ...updatedSteps[idx], title };
-      return { ...prev, steps: updatedSteps };
-    });
-  };
-
-  const handleUpdateStepType = (idx: number, type: 'text' | 'pdf' | 'audio' | 'video' | 'image') => {
-    setScriptData(prev => {
-      const updatedSteps = [...prev.steps];
-      updatedSteps[idx] = { 
-        ...updatedSteps[idx], 
-        type,
-        contentUrl: '',
-        textContent: ''
-      };
-      return { ...prev, steps: updatedSteps };
-    });
-  };
-
-  const handleUpdateStepTextContent = (idx: number, textContent: string) => {
-    setScriptData(prev => {
-      const updatedSteps = [...prev.steps];
-      updatedSteps[idx] = { ...updatedSteps[idx], textContent };
-      return { ...prev, steps: updatedSteps };
-    });
-  };
-
-  const handleStepFileUpload = async (idx: number, file: File, type: string) => {
-    try {
-      setUploadingIdx(idx);
       const fileExt = file.name.split('.').pop();
-      const fileName = `chamber-${activeChamberId}-day${selectedDay}-step${idx}-${Date.now()}.${fileExt}`;
+      const fileName = `chamber-task-${Date.now()}.${fileExt}`;
       const bucket = 'program-assets';
       
       const publicUrl = await uploadAssetMutation.mutateAsync({
         file,
         bucket,
-        path: `chambers/${fileName}`
+        path: `tasks/${fileName}`
       });
-      
-      setScriptData(prev => {
-        const updatedSteps = [...prev.steps];
-        updatedSteps[idx] = {
-          ...updatedSteps[idx],
-          contentUrl: publicUrl
-        };
-        return { ...prev, steps: updatedSteps };
-      });
+
+      setContentUrl(publicUrl);
     } catch (err) {
-      console.error(err);
+      console.error('Upload failed:', err);
       alert('Upload failed. Ensure bucket "program-assets" exists.');
     } finally {
-      setUploadingIdx(null);
+      setIsUploading(false);
+    }
+  };
+
+  // Keep search params in sync with local states
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (selectedProgramId) params.programId = selectedProgramId;
+    if (dayNumber) params.day = String(dayNumber);
+    setSearchParams(params);
+  }, [selectedProgramId, dayNumber, setSearchParams]);
+
+  // Chamber display info
+  const chamberInfo = CHAMBERS_INFO[chamberId as keyof typeof CHAMBERS_INFO] || { name: chamberId.toUpperCase().replace('-', ' ') };
+
+  // Resolve matching module and lesson
+  const matchedModule = programDetails?.modules?.find(
+    (mod: any) => matchChamberKey(mod.title) === chamberId
+  );
+  const matchedLesson = matchedModule?.lessons?.find(
+    (less: any) => less.day_number === dayNumber
+  );
+
+  // Handle module initialization
+  const handleInitializeModule = async () => {
+    if (!selectedProgramId) return;
+    try {
+      await saveModuleMutation.mutateAsync({
+        program_id: selectedProgramId,
+        title: `Chamber: ${chamberInfo.name}`,
+        order_index: (programDetails?.modules?.length || 0) + 1
+      });
+    } catch (err) {
+      console.error('Failed to initialize chamber module:', err);
+    }
+  };
+
+  // Handle lesson initialization
+  const handleInitializeLesson = async () => {
+    if (!matchedModule) return;
+    try {
+      await saveLessonMutation.mutateAsync({
+        module_id: matchedModule.id,
+        title: `Day Protocol ${dayNumber}`,
+        day_number: dayNumber,
+        unlock_day: dayNumber
+      });
+    } catch (err) {
+      console.error('Failed to initialize day lesson:', err);
+    }
+  };
+
+  // Handle task creation
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!taskTitle.trim()) return;
+
+    let targetLessonId = matchedLesson?.id;
+
+    // 1. Auto-create lesson if it doesn't exist yet
+    if (!targetLessonId) {
+      if (!matchedModule) {
+        alert('Please initialize the Chamber Module first before adding tasks.');
+        return;
+      }
+      try {
+        const newLesson = await saveLessonMutation.mutateAsync({
+          module_id: matchedModule.id,
+          title: `Day Protocol ${dayNumber}`,
+          day_number: dayNumber,
+          unlock_day: dayNumber
+        });
+        targetLessonId = newLesson.id;
+      } catch (err) {
+        console.error('Failed to auto-create lesson:', err);
+        return;
+      }
+    }
+
+    // 2. Save the task
+    try {
+      const dbType = (taskType === 'image' || taskType === 'pdf') ? 'text' : taskType;
+      await saveTaskMutation.mutateAsync({
+        lesson_id: targetLessonId,
+        title: taskTitle.trim(),
+        description: taskDescription.trim(),
+        type: dbType as any,
+        content: { 
+          url: contentUrl.trim(),
+          format: taskType 
+        },
+        order_index: (matchedLesson?.tasks?.length || 0) + 1
+      });
+
+      // Clear form
+      setTaskTitle('');
+      setTaskDescription('');
+      setContentUrl('');
+    } catch (err) {
+      console.error('Failed to save task:', err);
+    }
+  };
+
+  // Handle task deletion
+  const handleDeleteTask = async (taskId: string) => {
+    if (window.confirm('Are you sure you want to delete this task?')) {
+      try {
+        await deleteTaskMutation.mutateAsync(taskId);
+      } catch (err) {
+        console.error('Failed to delete task:', err);
+      }
     }
   };
 
   return (
-    <Box sx={{ maxWidth: 900, mx: 'auto', pb: 8 }}>
-      {/* Header Back Button */}
-      <Box sx={{ mb: 3 }}>
+    <Box sx={{ p: 4, maxWidth: 1200, margin: '0 auto', minHeight: '80vh' }}>
+      {/* Header Navigation */}
+      <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
         <Button 
           component={Link} 
           to="/admin/program-builder" 
           startIcon={<ArrowLeft size={16} />}
-          sx={{ color: '#B0B0B0', px: 0, '&:hover': { background: 'transparent', color: '#EAEAEA' } }}
+          sx={{ color: 'var(--emerald-primary)', textTransform: 'none', fontWeight: 600 }}
         >
           Back to Program Builder
         </Button>
       </Box>
 
-      {/* Title block */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, mb: 4, textAlign: 'left' }}>
-        <Box 
-          sx={{ 
-            width: 60, 
-            height: 60, 
-            borderRadius: '50%', 
-            backgroundColor: 'rgba(212, 175, 55, 0.05)', 
-            border: '1px solid rgba(212, 175, 55, 0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#D4AF37'
-          }}
-        >
-          <Icon size={30} />
+      {/* Chamber Identity Banner */}
+      <Paper sx={{ p: 4, mb: 4, display: 'flex', alignItems: 'center', gap: 3, border: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: 'rgba(255, 255, 255, 0.02)' }}>
+        <Box sx={{ p: 2, borderRadius: '50%', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--emerald-primary)' }}>
+          {getChamberIcon(chamberId)}
         </Box>
         <Box>
-          <Typography variant="overline" sx={{ color: '#D4AF37', fontWeight: 800, letterSpacing: 2 }}>
-            CHAMBER {('number' in chamber) ? chamber.number : ''}
-          </Typography>
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            {chamber.name}
-          </Typography>
+          <Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: 0.5 }}>{chamberInfo.name}</Typography>
+          <Typography variant="body2" sx={{ color: '#B0B0B0' }}>Configuring tasks inside the chambers structure.</Typography>
         </Box>
-      </Box>
+      </Paper>
 
-      {/* Editor Layout Grid */}
-      <Stack spacing={3}>
-        {/* Scope, Day Select & Action Panel */}
-        <Paper sx={{ p: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 3, border: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(255,255,255,0.01)' }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center', flexGrow: 1 }}>
-            <FormControl size="small" sx={{ minWidth: 250 }}>
-              <InputLabel id="program-select-label" sx={{ color: '#888' }}>Program Scope</InputLabel>
-              <Select
-                labelId="program-select-label"
-                value={programId || 'default'}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === 'new') {
-                    navigate('/admin/program-builder');
-                  } else {
-                    setProgramId(val === 'default' ? null : val);
-                  }
-                }}
-                label="Program Scope"
-              >
-                <MenuItem value="default"><em>Default / Global Template</em></MenuItem>
-                <MenuItem value="new" sx={{ color: 'var(--emerald-primary)', fontWeight: 700 }}>+ Create New Program</MenuItem>
-                <Divider />
-                {allPrograms?.map(p => (
-                  <MenuItem key={p.id} value={p.id}>{p.title}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+      <Stack spacing={4}>
+        {/* Selector Panel */}
+        <Paper sx={{ p: 3, border: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: 'rgba(255, 255, 255, 0.01)' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 3 }}>Select Program & Target Day</Typography>
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="program-select-label">Select Program</InputLabel>
+                <Select
+                  labelId="program-select-label"
+                  value={selectedProgramId}
+                  label="Select Program"
+                  onChange={(e) => setSelectedProgramId(e.target.value)}
+                >
+                  {isLoadingPrograms ? (
+                    <MenuItem disabled><CircularProgress size={20} /></MenuItem>
+                  ) : (
+                    programs.map((prog) => (
+                      <MenuItem key={prog.id} value={prog.id}>{prog.title}</MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Target Day"
+                type="number"
+                value={dayNumber}
+                onChange={(e) => setDayNumber(Math.max(1, Number(e.target.value)))}
+                slotProps={{ htmlInput: { min: 1 } }}
+              />
+            </Grid>
+          </Grid>
+        </Paper>
 
-            <Typography variant="h6" sx={{ color: 'var(--emerald-primary)', fontWeight: 800, px: 1 }}>
-              Day {selectedDay}
+        {/* Builder Panel */}
+        {!selectedProgramId ? (
+          <Paper sx={{ p: 6, textAlign: 'center', border: '1px dashed rgba(255, 255, 255, 0.1)' }}>
+            <Typography variant="body1" sx={{ color: '#888' }}>
+              Please select a program above to start configuring tasks.
             </Typography>
-
-            <TextField
-              size="small"
-              label="Day Theme"
-              value={dayThemeInput}
-              onChange={(e) => handleDayThemeChange(e.target.value)}
-              sx={{ minWidth: 180 }}
-              placeholder="e.g. Ignition"
-            />
-          </Stack>
-
-          <Stack direction="row" spacing={2}>
-            <Button 
-              variant="outlined" 
-              onClick={loadDefault} 
-              sx={{ color: '#B0B0B0', borderColor: 'rgba(255,255,255,0.1)' }}
-            >
-              Reset to Week 1 Default
-            </Button>
+          </Paper>
+        ) : isLoadingDetails ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <CircularProgress sx={{ color: 'var(--emerald-primary)' }} />
+          </Box>
+        ) : !matchedModule ? (
+          <Paper sx={{ p: 4, textAlign: 'center', border: '1px dashed rgba(16, 185, 129, 0.2)' }}>
+            <Typography variant="body1" sx={{ mb: 2, fontWeight: 600 }}>
+              This chamber's module is not yet initialized in the selected program.
+            </Typography>
             <Button 
               variant="contained" 
-              startIcon={isSaved ? <CheckCircle size={16} /> : <Save size={16} />} 
-              onClick={handleSave} 
-              sx={{ 
-                backgroundColor: isSaved ? '#4CAF50' : 'var(--emerald-primary)', 
-                color: '#0B0B0F',
-                fontWeight: 700,
-                '&:hover': { backgroundColor: isSaved ? '#45a049' : 'var(--emerald-light)' }
-              }}
+              onClick={handleInitializeModule}
+              disabled={saveModuleMutation.isPending}
+              sx={{ backgroundColor: 'var(--emerald-mid)', color: 'var(--emerald-primary)', fontWeight: 700 }}
             >
-              {isSaved ? 'Script Saved!' : 'Save Chamber Script'}
+              {saveModuleMutation.isPending ? 'Initializing...' : `Initialize Module for ${chamberInfo.name}`}
             </Button>
-          </Stack>
-        </Paper>
-
-        {/* Script Config Editor */}
-        <Paper sx={{ p: 4 }}>
-          <Typography variant="h6" sx={{ fontWeight: 800, mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <FileText size={20} color="var(--emerald-primary)" />
-            Chamber Routine Configurator
-          </Typography>
-
+          </Paper>
+        ) : (
           <Stack spacing={4}>
-            {/* Day Title */}
-            <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1, color: '#B0B0B0', fontWeight: 700 }}>DAY PROTOCOL TITLE</Typography>
-              <TextField 
-                fullWidth 
-                size="small" 
-                placeholder="e.g., Mental Clarity Ignition, Release Walk, etc."
-                value={scriptData.title || ''}
-                onChange={(e) => setScriptData(prev => ({ ...prev, title: e.target.value }))}
-              />
-            </Box>
+            {/* Task Creation Form */}
+            <Paper sx={{ p: 3, border: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: 'rgba(255, 255, 255, 0.01)' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 3 }}>Add New Task</Typography>
+              
+              <Box component="form" onSubmit={handleAddTask}>
+                <Stack spacing={2.5}>
+                  <TextField
+                    fullWidth
+                    required
+                    size="small"
+                    label="Task Title"
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    placeholder={placeholders[taskType].title}
+                  />
 
-            {/* When / Duration */}
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3}>
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1, color: '#B0B0B0', fontWeight: 700 }}>WHEN TO DO IT</Typography>
-                <TextField 
-                  fullWidth 
-                  size="small" 
-                  placeholder="e.g., Upon waking, Pre-sleep, Mid-day"
-                  value={scriptData.when}
-                  onChange={(e) => setScriptData(prev => ({ ...prev, when: e.target.value }))}
-                />
-              </Box>
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1, color: '#B0B0B0', fontWeight: 700 }}>DURATION</Typography>
-                <TextField 
-                  fullWidth 
-                  size="small" 
-                  placeholder="e.g., 12 minutes, 1 hour"
-                  value={scriptData.duration}
-                  onChange={(e) => setScriptData(prev => ({ ...prev, duration: e.target.value }))}
-                />
-              </Box>
-            </Stack>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="task-type-label">Task Type</InputLabel>
+                    <Select
+                      labelId="task-type-label"
+                      value={taskType}
+                      label="Task Type"
+                      onChange={(e) => setTaskType(e.target.value as any)}
+                    >
+                      <MenuItem value="text">Written Protocol (Text)</MenuItem>
+                      <MenuItem value="audio">Audio Routine</MenuItem>
+                      <MenuItem value="video">Video Routine</MenuItem>
+                      <MenuItem value="image">Image Protocol</MenuItem>
+                      <MenuItem value="pdf">PDF Document</MenuItem>
+                    </Select>
+                  </FormControl>
 
-            {/* Steps list */}
-            <Box>
-              <Typography variant="subtitle2" sx={{ mb: 2, color: '#B0B0B0', fontWeight: 700 }}>CHAMBER STEPS / TIMELINE</Typography>
-              <Stack spacing={2} sx={{ mb: 3 }}>
-                {scriptData.steps.map((step, idx) => (
-                  <Paper 
-                    key={idx} 
-                    sx={{ 
-                      p: 2.5, 
-                      backgroundColor: 'rgba(255, 255, 255, 0.01)', 
-                      border: '1px solid rgba(255, 255, 255, 0.05)', 
-                      borderRadius: 2,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 2
-                    }}
-                  >
-                    {/* Row 1: Step Index, Title, and Trash Button */}
-                    <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-                      <Typography variant="subtitle2" sx={{ color: '#D4AF37', fontWeight: 800, minWidth: 24 }}>
-                        #{idx + 1}
-                      </Typography>
-                      <TextField 
-                        fullWidth 
-                        size="small"
-                        label="Step / Task Title"
-                        variant="outlined" 
-                        value={step.title}
-                        onChange={(e) => handleUpdateStepTitle(idx, e.target.value)}
-                      />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Description / Instruction (Optional)"
+                    value={taskDescription}
+                    onChange={(e) => setTaskDescription(e.target.value)}
+                    multiline
+                    rows={2}
+                    placeholder={placeholders[taskType].description}
+                  />
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Resource Link / URL (Optional)"
+                    value={contentUrl}
+                    onChange={(e) => setContentUrl(e.target.value)}
+                    placeholder={placeholders[taskType].url}
+                    disabled={isUploading}
+                  />
+
+                  {taskType !== 'text' && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Button
+                        variant="outlined"
+                        component="label"
+                        startIcon={isUploading ? <CircularProgress size={16} /> : <Upload size={16} />}
+                        disabled={isUploading}
+                        sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}
+                      >
+                        {isUploading ? 'Uploading...' : `Upload ${taskType.toUpperCase()} File`}
+                        <input
+                          type="file"
+                          hidden
+                          onChange={handleFileChange}
+                          accept={
+                            taskType === 'audio' ? 'audio/*' :
+                            taskType === 'video' ? 'video/*' :
+                            taskType === 'image' ? 'image/*' :
+                            taskType === 'pdf' ? 'application/pdf' :
+                            '*/*'
+                          }
+                        />
+                      </Button>
+                      {contentUrl && (
+                        <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 600 }}>
+                          ✓ File Attached
+                        </Typography>
+                      )}
+                    </Box>
+                  )}
+
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      startIcon={saveTaskMutation.isPending ? <CircularProgress size={16} /> : <Plus size={16} />}
+                      disabled={saveTaskMutation.isPending || saveLessonMutation.isPending}
+                      sx={{ backgroundColor: 'var(--emerald-mid)', color: 'var(--emerald-primary)', fontWeight: 700 }}
+                    >
+                      {saveTaskMutation.isPending || saveLessonMutation.isPending ? 'Saving...' : 'Add Task to Day'}
+                    </Button>
+                  </Box>
+                </Stack>
+              </Box>
+            </Paper>
+
+            {/* Tasks List */}
+            <Paper sx={{ p: 3, border: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: 'rgba(255, 255, 255, 0.01)' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 2 }}>
+                Current Tasks for Day {dayNumber}
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+
+              {!matchedLesson || !matchedLesson.tasks || matchedLesson.tasks.length === 0 ? (
+                <Typography variant="body2" sx={{ color: '#666', py: 2, textAlign: 'center' }}>
+                  No tasks added for this day yet. Use the form above to add a task.
+                </Typography>
+              ) : (
+                <Stack spacing={2}>
+                  {matchedLesson.tasks.map((task: any) => (
+                    <Box 
+                      key={task.id}
+                      sx={{ 
+                        p: 2, 
+                        borderRadius: 2, 
+                        backgroundColor: 'rgba(255, 255, 255, 0.02)', 
+                        border: '1px solid rgba(255, 255, 255, 0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 2
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Box sx={{ color: 'var(--emerald-primary)' }}>
+                          {task.type === 'checklist' && <CheckSquare size={18} />}
+                          {task.type === 'audio' && <Mic size={18} />}
+                          {task.type === 'video' && <PlayCircle size={18} />}
+                          {task.type === 'text' && <FileText size={18} />}
+                        </Box>
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>{task.title}</Typography>
+                          {task.description && (
+                            <Typography variant="caption" sx={{ color: '#B0B0B0', display: 'block' }}>
+                              {task.description}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+
                       <IconButton 
                         size="small" 
-                        onClick={() => handleRemoveStep(idx)} 
-                        sx={{ color: 'rgba(244, 67, 54, 0.6)', '&:hover': { color: '#f44336', backgroundColor: 'rgba(244, 67, 54, 0.1)' } }}
+                        onClick={() => handleDeleteTask(task.id)}
+                        disabled={deleteTaskMutation.isPending}
+                        sx={{ color: 'rgba(244, 67, 54, 0.5)', '&:hover': { color: '#f44336' } }}
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={16} />
                       </IconButton>
-                    </Stack>
-
-                    {/* Row 2: Type Dropdown & Type-Specific Content */}
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center', width: '100%' }}>
-                      <FormControl size="small" sx={{ minWidth: 150 }}>
-                        <InputLabel id={`step-type-${idx}-label`} sx={{ color: '#888' }}>Type</InputLabel>
-                        <Select
-                          labelId={`step-type-${idx}-label`}
-                          value={step.type || 'text'}
-                          label="Type"
-                          onChange={(e) => handleUpdateStepType(idx, e.target.value as any)}
-                        >
-                          <MenuItem value="text">Text</MenuItem>
-                          <MenuItem value="pdf">PDF File</MenuItem>
-                          <MenuItem value="audio">Audio</MenuItem>
-                          <MenuItem value="video">Video</MenuItem>
-                          <MenuItem value="image">Image</MenuItem>
-                        </Select>
-                      </FormControl>
-
-                      {/* Type Specific Fields */}
-                      <Box sx={{ flexGrow: 1, width: '100%' }}>
-                        {step.type === 'text' && (
-                          <TextField
-                            fullWidth
-                            size="small"
-                            label="Text Content / Description"
-                            placeholder="Type any instructions or detailed descriptions for this step..."
-                            value={step.textContent || ''}
-                            onChange={(e) => handleUpdateStepTextContent(idx, e.target.value)}
-                          />
-                        )}
-
-                        {step.type !== 'text' && (
-                          <Stack direction="row" spacing={2} sx={{ alignItems: 'center', width: '100%' }}>
-                            <input
-                              type="file"
-                              accept={
-                                step.type === 'pdf' ? 'application/pdf' :
-                                step.type === 'audio' ? 'audio/*' :
-                                step.type === 'video' ? 'video/*' :
-                                'image/*'
-                              }
-                              id={`upload-step-${idx}`}
-                              style={{ display: 'none' }}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleStepFileUpload(idx, file, step.type);
-                              }}
-                            />
-                            <label htmlFor={`upload-step-${idx}`}>
-                              <Button
-                                variant="outlined"
-                                component="span"
-                                size="small"
-                                startIcon={
-                                  uploadingIdx === idx ? (
-                                    <CircularProgress size={14} color="inherit" />
-                                  ) : (
-                                    <Upload size={14} />
-                                  )
-                                }
-                                disabled={uploadingIdx === idx}
-                                sx={{ 
-                                  color: 'var(--emerald-primary)', 
-                                  borderColor: 'var(--emerald-mid)',
-                                  '&:hover': { borderColor: 'var(--emerald-light)', backgroundColor: 'var(--emerald-dark)' }
-                                }}
-                              >
-                                {step.contentUrl ? 'Change File' : 'Upload Asset'}
-                              </Button>
-                            </label>
-
-                            {step.contentUrl && (
-                              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                                <IconButton 
-                                  size="small" 
-                                  onClick={() => window.open(step.contentUrl, '_blank')} 
-                                  sx={{ color: 'var(--emerald-primary)' }}
-                                >
-                                  <LinkIcon size={16} />
-                                </IconButton>
-                                <Typography variant="caption" sx={{ color: '#B0B0B0', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 250 }}>
-                                  {step.contentUrl.split('/').pop()}
-                                </Typography>
-                              </Stack>
-                            )}
-                            
-                            {!step.contentUrl && uploadingIdx !== idx && (
-                              <Typography variant="caption" sx={{ color: '#666', fontStyle: 'italic' }}>
-                                No file uploaded yet.
-                              </Typography>
-                            )}
-                          </Stack>
-                        )}
-                      </Box>
-                    </Stack>
-                  </Paper>
-                ))}
-                {scriptData.steps.length === 0 && (
-                  <Typography variant="caption" sx={{ color: '#555', fontStyle: 'italic', py: 2 }}>
-                    No steps added to this day's chamber script.
-                  </Typography>
-                )}
-              </Stack>
-
-              {/* Add step input */}
-              <Stack direction="row" spacing={1.5}>
-                <TextField 
-                  fullWidth 
-                  size="small" 
-                  placeholder="Enter a new step details (e.g. 06:30 Open eyes...)"
-                  value={newStepText}
-                  onChange={(e) => setNewStepText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddStep(); } }}
-                />
-                <Button 
-                  variant="outlined" 
-                  startIcon={<Plus size={16} />} 
-                  onClick={handleAddStep}
-                  sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)', px: 3 }}
-                >
-                  Add
-                </Button>
-              </Stack>
-            </Box>
-
-            <Divider sx={{ opacity: 0.1 }} />
-
-            {/* Directive */}
-            <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1, color: '#B0B0B0', fontWeight: 700 }}>DAILY DIRECTIVE</Typography>
-              <TextField 
-                fullWidth 
-                multiline 
-                rows={2} 
-                placeholder="The single directive capturing the spirit of the day..."
-                value={scriptData.directive}
-                onChange={(e) => setScriptData(prev => ({ ...prev, directive: e.target.value }))}
-              />
-            </Box>
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+            </Paper>
           </Stack>
-        </Paper>
+        )}
       </Stack>
     </Box>
   );
