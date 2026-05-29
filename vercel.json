@@ -3,27 +3,27 @@
   "rewrites": [
     {
       "source": "/admin/assets/(.*)",
-      "destination": "/Admin/dist/assets/$1"
+      "destination": "/admin/assets/$1"
     },
     {
       "source": "/admin/(.*)",
-      "destination": "/Admin/dist/index.html"
+      "destination": "/admin/index.html"
     },
     {
       "source": "/admin",
-      "destination": "/Admin/dist/index.html"
+      "destination": "/admin/index.html"
     },
     {
       "source": "/assets/(.*)",
-      "destination": "/User/dist/assets/$1"
+      "destination": "/assets/$1"
     },
     {
       "source": "/favicon.ico",
-      "destination": "/User/dist/favicon.ico"
+      "destination": "/favicon.ico"
     },
     {
       "source": "/((?!admin|assets|favicon.ico).*)",
-      "destination": "/User/dist/index.html"
+      "destination": "/index.html"
     }
   ]
 }
