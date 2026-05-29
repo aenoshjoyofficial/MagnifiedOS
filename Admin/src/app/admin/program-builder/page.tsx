@@ -1452,31 +1452,29 @@ const ProgramBuilder = () => {
                           {expandedModules.includes(module.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                         </IconButton>
                         <Typography variant="subtitle2" sx={{ color: 'var(--emerald-primary)', fontWeight: 800 }}>M{mIdx + 1}</Typography>
-                        <FormControl size="small" variant="standard" sx={{ minWidth: 280 }} onClick={(e) => e.stopPropagation()}>
-                          <Select
-                            value={module.title || ''}
-                            onChange={async (e) => {
-                              const newTitle = e.target.value;
-                              updateModuleTitle(module.id, newTitle);
-                              const updatedModule = { ...module, title: newTitle };
-                              const { lessons, ...payload } = updatedModule;
-                              await saveModuleMutation.mutateAsync(payload);
-                            }}
-                            displayEmpty
-                            disableUnderline
-                            sx={{ fontWeight: 700, fontSize: '1rem', color: '#EAEAEA' }}
-                          >
-                            <MenuItem value="" disabled><em>Select Chamber</em></MenuItem>
-                            <MenuItem value="MENTAL CLARITY">MENTAL CLARITY</MenuItem>
-                            <MenuItem value="THE FREQUENCY FIELD">THE FREQUENCY FIELD</MenuItem>
-                            <MenuItem value="FIELD DESIGN">FIELD DESIGN</MenuItem>
-                            <MenuItem value="THE LIVING FRAME">THE LIVING FRAME</MenuItem>
-                            <MenuItem value="THE PLATE">THE PLATE</MenuItem>
-                            <MenuItem value="SLEEP COCOON">SLEEP COCOON</MenuItem>
-                            <MenuItem value="BREATH ATELIER">BREATH ATELIER</MenuItem>
-                            <MenuItem value="THE SIGNATURE">THE SIGNATURE</MenuItem>
-                          </Select>
-                        </FormControl>
+                        <TextField
+                          size="small"
+                          variant="standard"
+                          placeholder="Select Chamber / Module Title"
+                          value={module.title || ''}
+                          onChange={(e) => updateModuleTitle(module.id, e.target.value)}
+                          onBlur={async () => {
+                            const updatedModule = { ...module };
+                            const { lessons, ...payload } = updatedModule;
+                            await saveModuleMutation.mutateAsync(payload);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          sx={{ 
+                            minWidth: 280,
+                            '& .MuiInputBase-input': { 
+                              fontWeight: 700, 
+                              fontSize: '1rem', 
+                              color: '#EAEAEA',
+                              borderBottom: '1px dashed rgba(255, 255, 255, 0.1)',
+                              pb: 0.5
+                            } 
+                          }}
+                        />
                         <IconButton 
                           size="small" 
                           onClick={(e) => {
@@ -1556,41 +1554,29 @@ const ProgramBuilder = () => {
                                         })}
                                       </Select>
                                     </FormControl>
-                                    <FormControl size="small" variant="standard" sx={{ minWidth: 200, flexGrow: 1 }}>
-                                      <Select
-                                        value={lesson.title || ''}
-                                        onChange={async (e) => {
-                                          const selectedTitle = e.target.value;
-                                          const foundDay = dayTitles.find(t => t.title === selectedTitle);
-                                          const newDayNum = foundDay ? foundDay.day : (lesson.day_number || 1);
-                                          
-                                          updateLessonTitle(module.id, lesson.id, selectedTitle);
-                                          updateLessonDayNumber(module.id, lesson.id, newDayNum);
-                                          
-                                          const updatedLesson = { 
-                                            ...lesson, 
-                                            title: selectedTitle, 
-                                            day_number: newDayNum, 
-                                            unlock_day: newDayNum 
-                                          };
-                                          const { tasks, ...payload } = updatedLesson;
-                                          await saveLessonMutation.mutateAsync(payload);
-                                        }}
-                                        displayEmpty
-                                        disableUnderline
-                                        sx={{ fontSize: '0.9rem', color: '#EAEAEA', fontWeight: 600 }}
-                                      >
-                                        <MenuItem value="" disabled><em>Select Day Protocol Title</em></MenuItem>
-                                        {dayTitles.map((t) => (
-                                          <MenuItem key={t.day} value={t.title} sx={{ fontSize: '0.85rem' }}>
-                                            {t.title} (Day {t.day})
-                                          </MenuItem>
-                                        ))}
-                                        {lesson.title && !dayTitles.some(t => t.title === lesson.title) && (
-                                          <MenuItem value={lesson.title}>{lesson.title}</MenuItem>
-                                        )}
-                                      </Select>
-                                    </FormControl>
+                                    <TextField
+                                      size="small"
+                                      variant="standard"
+                                      placeholder="Select Day Protocol Title"
+                                      value={lesson.title || ''}
+                                      onChange={(e) => updateLessonTitle(module.id, lesson.id, e.target.value)}
+                                      onBlur={async () => {
+                                        const updatedLesson = { ...lesson };
+                                        const { tasks, ...payload } = updatedLesson;
+                                        await saveLessonMutation.mutateAsync(payload);
+                                      }}
+                                      sx={{ 
+                                        minWidth: 200, 
+                                        flexGrow: 1,
+                                        '& .MuiInputBase-input': { 
+                                          fontSize: '0.9rem', 
+                                          color: '#EAEAEA', 
+                                          fontWeight: 600,
+                                          borderBottom: '1px dashed rgba(255, 255, 255, 0.1)',
+                                          pb: 0.5
+                                        }
+                                      }}
+                                    />
                                     <Button
                                       component={Link}
                                       to={`/admin/chambers/${matchChamberKey(module.title) || 'mental-clarity'}?programId=${programId}&day=${lesson.day_number || 1}`}
