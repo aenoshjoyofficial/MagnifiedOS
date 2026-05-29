@@ -1,7 +1,7 @@
 {
   "outputDirectory": "dist",
-  "installCommand": "npm install && npm install --prefix User && npm install --prefix Admin",
-  "buildCommand": "npm run sync-env && npm run build --prefix User && npm run build --prefix Admin && node scripts/assemble-dist.js",
+  "buildCommand": "echo 'Using pre-built dist'",
+  "installCommand": "echo 'No install needed'",
   "rewrites": [
     { "source": "/admin", "destination": "/admin/index.html" },
     { "source": "/admin/(.*)", "destination": "/admin/index.html" },
