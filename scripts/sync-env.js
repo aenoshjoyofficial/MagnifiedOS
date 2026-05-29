@@ -15,18 +15,31 @@ console.log('🔄 Environment Sync: Starting synchronization...');
 
 let envContent = '';
 
-// Check if root .env exists, if not fall back to .env.example
-if (fs.existsSync(rootEnvPath)) {
+// Check if we are running in CI/CD (like Vercel) where env variables are in process.env
+const hasEnvVars = process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY;
+
+if (hasEnvVars) {
+  console.log('✅ Environment Sync: Detected environment variables in process.env (CI/CD mode).');
+  // Construct env content from process.env
+  const vars = [
+    `PORT=${process.env.PORT || '5050'}`,
+    `VITE_SUPABASE_URL=${process.env.VITE_SUPABASE_URL}`,
+    `VITE_SUPABASE_ANON_KEY=${process.env.VITE_SUPABASE_ANON_KEY}`,
+    `VITE_APP_ENV=${process.env.VITE_APP_ENV || 'production'}`,
+    `DISABLE_CSP=${process.env.DISABLE_CSP || 'false'}`
+  ];
+  envContent = vars.join('\n') + '\n';
+} else if (fs.existsSync(rootEnvPath)) {
   console.log(`✅ Environment Sync: Found root '.env' file.`);
   envContent = fs.readFileSync(rootEnvPath, 'utf8');
 } else if (fs.existsSync(rootEnvExamplePath)) {
   console.log(`⚠️  Environment Sync: Root '.env' not found. Falling back to '.env.example'.`);
   envContent = fs.readFileSync(rootEnvExamplePath, 'utf8');
-  // Write the root .env so user has a starting point
+  // Write the root .env so user has a starting point locally
   fs.writeFileSync(rootEnvPath, envContent, 'utf8');
   console.log(`💾 Environment Sync: Created '.env' from '.env.example' at root.`);
 } else {
-  console.error(`❌ Environment Sync: Error - Neither '.env' nor '.env.example' were found in the root directory!`);
+  console.error(`❌ Environment Sync: Error - Neither '.env' nor '.env.example' were found, and process.env is empty!`);
   process.exit(1);
 }
 

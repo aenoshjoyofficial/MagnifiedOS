@@ -1,12 +1,29 @@
 {
+  "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/admin/(.*)",
-      "destination": "/Admin/dist/$1"
+      "source": "/admin/assets/(.*)",
+      "destination": "/Admin/dist/assets/$1"
     },
     {
-      "source": "/(.*)",
-      "destination": "/User/dist/$1"
+      "source": "/admin/(.*)",
+      "destination": "/Admin/dist/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/Admin/dist/index.html"
+    },
+    {
+      "source": "/assets/(.*)",
+      "destination": "/User/dist/assets/$1"
+    },
+    {
+      "source": "/favicon.ico",
+      "destination": "/User/dist/favicon.ico"
+    },
+    {
+      "source": "/((?!admin|assets|favicon.ico).*)",
+      "destination": "/User/dist/index.html"
     }
   ]
 }
