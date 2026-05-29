@@ -26,7 +26,7 @@ export default defineConfig({
     ],
   },
   build: {
-    outDir: '../dist/admin',
+    outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,
     rollupOptions: {
