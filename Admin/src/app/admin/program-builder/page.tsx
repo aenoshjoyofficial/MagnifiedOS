@@ -1222,7 +1222,7 @@ const ProgramBuilder = () => {
                 </Button>
                 <Button
                   component={Link}
-                  to={`/admin/chambers/mental-clarity?programId=${programId}`}
+                  to={`/admin/chambers/mental-clarity?programId=${programId}&day=1`}
                   variant="outlined"
                   size="small"
                   sx={{ 
@@ -1592,6 +1592,25 @@ const ProgramBuilder = () => {
                                       </Select>
                                     </FormControl>
                                     <Button
+                                      component={Link}
+                                      to={`/admin/chambers/${matchChamberKey(module.title) || 'mental-clarity'}?programId=${programId}&day=${lesson.day_number || 1}`}
+                                      size="small"
+                                      variant="outlined"
+                                      startIcon={<Settings size={12} />}
+                                      sx={{ 
+                                        fontSize: '0.7rem', 
+                                        py: 0.5, 
+                                        color: 'var(--emerald-primary)', 
+                                        borderColor: 'var(--emerald-mid)',
+                                        '&:hover': { borderColor: 'var(--emerald-light)', backgroundColor: 'var(--emerald-dark)' },
+                                        textTransform: 'none',
+                                        minWidth: 100,
+                                        mr: 1
+                                      }}
+                                    >
+                                      Edit Chambers
+                                    </Button>
+                                    <Button
                                       size="small"
                                       variant="outlined"
                                       onClick={() => handleSyncRoutine(module.id, lesson)}
@@ -1797,7 +1816,7 @@ const ProgramBuilder = () => {
                           <Button 
                             variant="outlined" 
                             component={Link} 
-                            to={`/admin/chambers/mental-clarity?programId=${programId}`}
+                            to={`/admin/chambers/mental-clarity?programId=${programId}&day=1`}
                             sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}
                           >
                             Configure Tasks in Chambers Page

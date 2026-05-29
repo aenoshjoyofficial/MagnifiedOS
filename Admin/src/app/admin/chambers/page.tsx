@@ -75,8 +75,9 @@ const ChamberPage = () => {
   
   const [searchParams, setSearchParams] = useSearchParams();
   const urlProgramId = searchParams.get('programId');
+  const urlDay = searchParams.get('day');
+  const selectedDay = urlDay ? parseInt(urlDay, 10) : 1;
   
-  const [selectedDay, setSelectedDay] = useState<number>(1);
   const [programId, setProgramId] = useState<string | null>(urlProgramId);
   const [scriptData, setScriptData] = useState<ChamberScript>({
     title: '',
@@ -459,20 +460,9 @@ const ChamberPage = () => {
               </Select>
             </FormControl>
 
-            <TextField
-              size="small"
-              type="number"
-              label="Day"
-              value={selectedDay}
-              onChange={(e) => {
-                const val = parseInt(e.target.value, 10);
-                if (!isNaN(val) && val >= 1) {
-                  setSelectedDay(val);
-                }
-              }}
-              slotProps={{ htmlInput: { min: 1, max: durationDays } }}
-              sx={{ minWidth: 100 }}
-            />
+            <Typography variant="h6" sx={{ color: 'var(--emerald-primary)', fontWeight: 800, px: 1 }}>
+              Day {selectedDay}
+            </Typography>
 
             <TextField
               size="small"
