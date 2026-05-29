@@ -86,8 +86,8 @@ app.get('/health', (req, res) => {
 });
 
 // Serve Admin app static assets
-// Mounting under /admin so express.static will check inside Admin/dist for files requested relative to /admin
-app.use('/admin', express.static(path.join(__dirname, 'Admin/dist'), {
+// Mounting under /admin so express.static will check inside dist/admin for files requested relative to /admin
+app.use('/admin', express.static(path.join(__dirname, 'dist/admin'), {
   maxAge: '1d', // Cache static assets for 1 day in production
   etag: true
 }));
@@ -99,11 +99,11 @@ app.get('/admin/*', (req, res, next) => {
   if (isFileRequest) {
     return next();
   }
-  res.sendFile(path.join(__dirname, 'Admin/dist/index.html'));
+  res.sendFile(path.join(__dirname, 'dist/admin/index.html'));
 });
 
 // Serve User app static assets
-app.use(express.static(path.join(__dirname, 'User/dist'), {
+app.use(express.static(path.join(__dirname, 'dist'), {
   maxAge: '1d',
   etag: true
 }));
@@ -115,7 +115,7 @@ app.get('*', (req, res) => {
   if (isFileRequest) {
     return res.status(404).send('Not Found');
   }
-  res.sendFile(path.join(__dirname, 'User/dist/index.html'));
+  res.sendFile(path.join(__dirname, 'dist/index.html'));
 });
 
 // Start listening
