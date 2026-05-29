@@ -297,11 +297,18 @@ export const useSaveModule = () => {
   
   return useMutation({
     mutationFn: async (module: Partial<Module>) => {
-      const { data, error } = await supabase
-        .from('modules')
-        .upsert(module)
-        .select()
-        .single();
+      let query;
+      if (module.id) {
+        query = supabase
+          .from('modules')
+          .update(module)
+          .eq('id', module.id);
+      } else {
+        query = supabase
+          .from('modules')
+          .upsert(module);
+      }
+      const { data, error } = await query.select().single();
       
       if (error) throw error;
       return data;
@@ -341,11 +348,18 @@ export const useSaveLesson = () => {
   
   return useMutation({
     mutationFn: async (lesson: Partial<Lesson>) => {
-      const { data, error } = await supabase
-        .from('lessons')
-        .upsert(lesson)
-        .select()
-        .single();
+      let query;
+      if (lesson.id) {
+        query = supabase
+          .from('lessons')
+          .update(lesson)
+          .eq('id', lesson.id);
+      } else {
+        query = supabase
+          .from('lessons')
+          .upsert(lesson);
+      }
+      const { data, error } = await query.select().single();
       
       if (error) throw error;
       return data;
@@ -385,11 +399,18 @@ export const useSaveTask = () => {
   
   return useMutation({
     mutationFn: async (task: Partial<Task>) => {
-      const { data, error } = await supabase
-        .from('tasks')
-        .upsert(task)
-        .select()
-        .single();
+      let query;
+      if (task.id) {
+        query = supabase
+          .from('tasks')
+          .update(task)
+          .eq('id', task.id);
+      } else {
+        query = supabase
+          .from('tasks')
+          .upsert(task);
+      }
+      const { data, error } = await query.select().single();
       
       if (error) throw error;
       return data;

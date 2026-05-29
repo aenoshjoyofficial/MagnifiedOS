@@ -52,22 +52,13 @@ export const getDayOfWeekLabel = (dayNum: number): string => {
 };
 
 export const getDayTheme = (programId: string | null, dayNum: number): string => {
-  const storageKey = programId ? `program_${programId}_day_theme_${dayNum}` : `day_theme_${dayNum}`;
-  const saved = localStorage.getItem(storageKey);
-  if (saved) return saved;
-
   const weekDayNum = ((dayNum - 1) % 7) + 1;
   const defaultTheme = WEEK_THEMES.find(t => t.day === weekDayNum);
   return defaultTheme && defaultTheme.theme ? defaultTheme.theme : `Day ${dayNum}`;
 };
 
 export const saveDayTheme = (programId: string | null, dayNum: number, theme: string): void => {
-  const storageKey = programId ? `program_${programId}_day_theme_${dayNum}` : `day_theme_${dayNum}`;
-  if (theme.trim()) {
-    localStorage.setItem(storageKey, theme.trim());
-  } else {
-    localStorage.removeItem(storageKey);
-  }
+  // Local storage removed, DB theme settings will be used directly
 };
 
 export const normalizeScript = (script: any, chamberId: string, dayNum: number, programId: string | null = null): ChamberScript => {
@@ -116,15 +107,6 @@ export const normalizeScript = (script: any, chamberId: string, dayNum: number, 
 };
 
 export const getChamberScript = (chamberId: string, dayNum: number): ChamberScript => {
-  const storageKey = `chamber_script_${chamberId}_day${dayNum}`;
-  const saved = localStorage.getItem(storageKey);
-  if (saved) {
-    try {
-      return normalizeScript(JSON.parse(saved), chamberId, dayNum, null);
-    } catch (e) {
-      console.error('Error parsing script from localStorage:', e);
-    }
-  }
   // Return empty script for global/default template to keep it empty
   return {
     title: '',
@@ -147,15 +129,6 @@ export const getChamberDayTitles = (chamberId: string): { day: number; title: st
 export const getChamberScriptForProgram = (programId: string | null, chamberId: string, dayNum: number): ChamberScript => {
   if (!programId) {
     return getChamberScript(chamberId, dayNum);
-  }
-  const storageKey = `program_${programId}_chamber_script_${chamberId}_day${dayNum}`;
-  const saved = localStorage.getItem(storageKey);
-  if (saved) {
-    try {
-      return normalizeScript(JSON.parse(saved), chamberId, dayNum, programId);
-    } catch (e) {
-      console.error('Error parsing program-scoped script from localStorage:', e);
-    }
   }
   const info = CHAMBERS_INFO[chamberId as keyof typeof CHAMBERS_INFO];
   const themeStr = getDayTheme(programId, dayNum);

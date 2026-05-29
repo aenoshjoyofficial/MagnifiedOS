@@ -277,7 +277,7 @@ const ChamberPage = () => {
       <Stack spacing={4}>
         {/* Selector Panel */}
         <Paper sx={{ p: 3, border: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: 'rgba(255, 255, 255, 0.01)' }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 3 }}>Select Program & Target Day</Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 3 }}>Select Program</Typography>
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, md: 6 }}>
               <FormControl fullWidth size="small">
@@ -297,17 +297,6 @@ const ChamberPage = () => {
                   )}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Target Day"
-                type="number"
-                value={dayNumber}
-                onChange={(e) => setDayNumber(Math.max(1, Number(e.target.value)))}
-                slotProps={{ htmlInput: { min: 1 } }}
-              />
             </Grid>
           </Grid>
         </Paper>

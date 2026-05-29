@@ -26,9 +26,10 @@ import * as XLSX from 'xlsx';
 import { 
   validateWorkbook, 
   compileWorkbook, 
-  saveCompiledProgramToLocalStorage,
   ProgramJSON
 } from '../../lib/programCompiler';
+import { useSaveModule, useSaveLesson, useSaveTask } from '../../lib/queries';
+import { generateRoutineHtml } from '../../lib/chambersData';
 
 interface ProgramImportModalProps {
   open: boolean;
@@ -43,6 +44,10 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
   programId,
   onImportSuccess
 }) => {
+  const saveModuleMutation = useSaveModule();
+  const saveLessonMutation = useSaveLesson();
+  const saveTaskMutation = useSaveTask();
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -144,14 +149,53 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
     reader.readAsBinaryString(selectedFile);
   };
 
-  const handleCompile = () => {
+  const handleCompile = async () => {
     if (!programId || !compiledData) return;
 
     try {
       setLoading(true);
-      
-      // 3. Write to LocalStorage Scoped Keys
-      saveCompiledProgramToLocalStorage(programId, compiledData);
+      setValidationErrors([]);
+
+      // Write compiled modules, lessons, and tasks directly to the Supabase database
+      for (const mod of compiledData.modules) {
+        const savedModule = await saveModuleMutation.mutateAsync({
+          program_id: programId,
+          title: mod.title,
+          order_index: mod.order_index
+        });
+
+        for (const lesson of mod.lessons) {
+          const compiledRoutine = lesson.routine.map(r => ({
+            window: r.window,
+            system: r.system,
+            anchor: r.anchor,
+            instruction: r.instruction
+          }));
+          const routineHtml = generateRoutineHtml(compiledRoutine);
+
+          const savedLesson = await saveLessonMutation.mutateAsync({
+            module_id: savedModule.id,
+            title: lesson.title,
+            day_number: lesson.day_number,
+            unlock_day: lesson.day_number,
+            description: routineHtml
+          });
+
+          for (const task of lesson.tasks) {
+            await saveTaskMutation.mutateAsync({
+              lesson_id: savedLesson.id,
+              title: task.title,
+              type: task.type as any,
+              order_index: task.order_index,
+              content: {
+                routine_window: task.content.routine_window,
+                url: task.content.url,
+                text: task.content.text
+              }
+            });
+          }
+        }
+      }
       
       setSuccess(true);
       setTimeout(() => {
@@ -159,8 +203,8 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
         handleClose();
       }, 1500);
     } catch (err: any) {
-      console.error('Failed to compile and write locally:', err);
-      setValidationErrors([`Storage Write Failed: ${err.message || 'Could not populate local settings.'}`]);
+      console.error('Failed to import program to database:', err);
+      setValidationErrors([`Database Write Failed: ${err.message || 'Could not save program structure to Supabase.'}`]);
       setLoading(false);
     }
   };
