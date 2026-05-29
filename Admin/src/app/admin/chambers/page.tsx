@@ -459,25 +459,20 @@ const ChamberPage = () => {
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel id="day-select-label" sx={{ color: '#888' }}>Day of Week</InputLabel>
-              <Select
-                labelId="day-select-label"
-                value={selectedDay}
-                onChange={(e) => setSelectedDay(Number(e.target.value))}
-                label="Day of Week"
-              >
-                {Array.from({ length: durationDays }, (_, i) => i + 1).map(dayNum => {
-                  const label = getDayOfWeekLabel(dayNum);
-                  const themeStr = dayThemes[dayNum] || getDayTheme(programId, dayNum);
-                  return (
-                    <MenuItem key={dayNum} value={dayNum}>
-                      {label} (Day {dayNum}) — {themeStr}
-                    </MenuItem>
-                  );
-                })}
-              </Select>
-            </FormControl>
+            <TextField
+              size="small"
+              type="number"
+              label="Day"
+              value={selectedDay}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val) && val >= 1) {
+                  setSelectedDay(val);
+                }
+              }}
+              slotProps={{ htmlInput: { min: 1, max: durationDays } }}
+              sx={{ minWidth: 100 }}
+            />
 
             <TextField
               size="small"

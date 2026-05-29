@@ -25,31 +25,30 @@ export const CHAMBER_KEYS = [
 ] as const;
 
 export const CHAMBERS_INFO = {
-  'mental-clarity': { name: 'MENTAL CLARITY', number: 1, defaultSystem: 'Mental Clarity', defaultAnchor: 'Warm water · 8 breaths · cold rinse · light mobility' },
-  'frequency-field': { name: 'THE FREQUENCY FIELD', number: 2, defaultSystem: 'Activation Sequence', defaultAnchor: 'Tai Chi flow · joint articulation · nasal walking' },
-  'field-design': { name: 'FIELD DESIGN', number: 3, defaultSystem: 'Activation Sequence', defaultAnchor: 'Tai Chi flow · joint articulation · nasal walking' },
-  'living-frame': { name: 'THE LIVING FRAME', number: 4, defaultSystem: 'Activation Sequence', defaultAnchor: 'Tai Chi flow · joint articulation · nasal walking' },
-  'the-plate': { name: 'THE PLATE', defaultSystem: 'Strength + Digestion', defaultAnchor: 'Largest meal · 10 breaths before eating · slow chewing' },
-  'sleep-cocoon': { name: 'SLEEP COCOON', defaultSystem: 'Sleep Cocoon', defaultAnchor: '60-minute descent · delta · darkness · nasal only' },
-  'breath-atelier': { name: 'BREATH ATELIER', defaultSystem: 'Nervous-System Pacing', defaultAnchor: 'Midday Reset audio · brown noise · 8-minute breath' },
-  'the-signature': { name: 'THE SIGNATURE', defaultSystem: 'Parasympathetic Descent', defaultAnchor: 'Light dinner before 7:30pm · 6 Hz theta · alternate nostril' }
+  'mental-clarity': { name: 'MENTAL CLARITY', number: 1, defaultSystem: '', defaultAnchor: '' },
+  'frequency-field': { name: 'THE FREQUENCY FIELD', number: 2, defaultSystem: '', defaultAnchor: '' },
+  'field-design': { name: 'FIELD DESIGN', number: 3, defaultSystem: '', defaultAnchor: '' },
+  'living-frame': { name: 'THE LIVING FRAME', number: 4, defaultSystem: '', defaultAnchor: '' },
+  'the-plate': { name: 'THE PLATE', defaultSystem: '', defaultAnchor: '' },
+  'sleep-cocoon': { name: 'SLEEP COCOON', defaultSystem: '', defaultAnchor: '' },
+  'breath-atelier': { name: 'BREATH ATELIER', defaultSystem: '', defaultAnchor: '' },
+  'the-signature': { name: 'THE SIGNATURE', defaultSystem: '', defaultAnchor: '' }
 };
 
 export const WEEK_THEMES = [
-  { day: 1, label: 'Monday', theme: 'Ignition', discipline: 'Cold rinse 30 sec · phone off 20 min · one written sentence' },
-  { day: 2, label: 'Tuesday', theme: 'Momentum', discipline: 'Hydrate 20 min before meals · remove one notification' },
-  { day: 3, label: 'Wednesday', theme: 'The Pivot', discipline: 'Silence until first tea · fruit alone · evening Frequency Field added' },
-  { day: 4, label: 'Thursday', theme: 'Refinement', discipline: 'No multitasking before noon · 20 chews per bite · voice note in The Signature' },
-  { day: 5, label: 'Friday', theme: 'Release', discipline: 'One hour digital silence · scent anchor · Yoga Nidra' },
-  { day: 6, label: 'Saturday', theme: 'Restoration', discipline: 'Nature 20 min · breath before speaking · review the week\'s entries' },
-  { day: 7, label: 'Sunday', theme: 'The Seal', discipline: '3-min immersion · no reactive conversations · write Personal Operating Notes' },
+  { day: 1, label: 'Day 1', theme: '', discipline: '' },
+  { day: 2, label: 'Day 2', theme: '', discipline: '' },
+  { day: 3, label: 'Day 3', theme: '', discipline: '' },
+  { day: 4, label: 'Day 4', theme: '', discipline: '' },
+  { day: 5, label: 'Day 5', theme: '', discipline: '' },
+  { day: 6, label: 'Day 6', theme: '', discipline: '' },
+  { day: 7, label: 'Day 7', theme: '', discipline: '' },
 ];
 
 export const DEFAULT_CHAMBER_SCRIPTS: Record<string, Record<number, any>> = {};
 
 export const getDayOfWeekLabel = (dayNum: number): string => {
-  const labels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  return labels[(dayNum - 1) % 7];
+  return `Day ${dayNum}`;
 };
 
 export const getDayTheme = (programId: string | null, dayNum: number): string => {
@@ -59,7 +58,7 @@ export const getDayTheme = (programId: string | null, dayNum: number): string =>
 
   const weekDayNum = ((dayNum - 1) % 7) + 1;
   const defaultTheme = WEEK_THEMES.find(t => t.day === weekDayNum);
-  return defaultTheme ? defaultTheme.theme : `Day ${dayNum}`;
+  return defaultTheme && defaultTheme.theme ? defaultTheme.theme : `Day ${dayNum}`;
 };
 
 export const saveDayTheme = (programId: string | null, dayNum: number, theme: string): void => {
@@ -177,7 +176,7 @@ export const getChamberDayTitlesForProgram = (programId: string | null, chamberI
     if (!title) {
       const info = CHAMBERS_INFO[chamberId as keyof typeof CHAMBERS_INFO];
       const themeStr = getDayTheme(programId, d);
-      title = info ? `${info.name} - ${themeStr}` : `${getDayOfWeekLabel(d)} (Day ${d}) — ${themeStr}`;
+      title = info ? `${info.name} - ${themeStr}` : `Day ${d}${themeStr ? ` — ${themeStr}` : ''}`;
     }
     list.push({ day: d, title });
   }
