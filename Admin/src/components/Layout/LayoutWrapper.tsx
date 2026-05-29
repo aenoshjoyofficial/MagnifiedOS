@@ -1,0 +1,43 @@
+import React from 'react';
+import { Box } from '@mui/material';
+import Sidebar from './Sidebar';
+import Topbar from './Topbar';
+import { useUIStore } from '@/store/useStore';
+import { useLocation } from 'react-router-dom';
+
+const PUBLIC_ROUTES = ['/admin/login', '/admin/signup', '/admin/forgot-password', '/admin/reset-password'];
+
+const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
+  const { isSidebarOpen } = useUIStore();
+  const location = useLocation();
+  const pathname = location.pathname;
+
+  const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
+
+  if (isPublicRoute) {
+    return <>{children}</>;
+  }
+
+  return (
+    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#0B0B0F' }}>
+      <Sidebar />
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          transition: 'margin-left 0.3s ease',
+        }}
+      >
+        <Topbar />
+        <Box sx={{ p: { xs: 2, md: 4 }, flexGrow: 1 }}>
+          {children}
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+export default LayoutWrapper;
