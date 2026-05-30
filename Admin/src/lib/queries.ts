@@ -171,18 +171,34 @@ export const useSaveProgram = () => {
   
   return useMutation({
     mutationFn: async (program: Partial<Program>) => {
+      console.log("START SAVE");
+      console.log("BEFORE INSERT");
       const { data, error } = await supabase
         .from('programs')
         .upsert(program)
         .select()
         .single();
       
-      if (error) throw error;
+      console.log("AFTER INSERT");
+      console.log("data:", data);
+      console.log("error:", error);
+      
+      if (error) {
+        // Mock toast error fallback
+        const errMsg = error.message || 'Unknown database error';
+        console.error("TOAST ERROR:", errMsg);
+        if (typeof window !== 'undefined') {
+          alert(`Error: ${errMsg}`);
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: (data) => {
+      console.log("REFRESH PROGRAMS");
       queryClient.invalidateQueries({ queryKey: ['programs'] });
       queryClient.invalidateQueries({ queryKey: ['program-details', data.id] });
+      console.log("DONE");
     },
   });
 };

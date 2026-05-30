@@ -127,6 +127,10 @@ const ProgramBuilder = () => {
   const [tempSelectedTask, setTempSelectedTask] = useState<{ [day: number]: string }>({});
   const [tempSelectedWindow, setTempSelectedWindow] = useState<{ [day: number]: string }>({});
 
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [dayToDeleteTasks, setDayToDeleteTasks] = useState<number | null>(null);
+  const [publishing, setPublishing] = useState(false);
+
 
 
   // Sync state with URL
@@ -166,6 +170,226 @@ const ProgramBuilder = () => {
       setNotification({ open: true, message: 'Failed to delete lesson.', severity: 'error' });
     }
   };
+
+  const openDeleteAllDialog = (dayNum: number) => {
+    setDayToDeleteTasks(dayNum);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    if (dayToDeleteTasks !== null) {
+      await handleDeleteAllLessonTasks(dayToDeleteTasks);
+    }
+    setDeleteConfirmOpen(false);
+    setDayToDeleteTasks(null);
+  };
+
+  const handleDeleteAllLessonTasks = async (dayNum: number) => {
+    try {
+      const tasksToDelete: any[] = [];
+      localModules.forEach(m => {
+        const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+        lesson?.tasks?.forEach((t: any) => {
+          tasksToDelete.push({ id: t.id, lessonId: lesson.id });
+        });
+      });
+
+      console.log(`[DEBUG] Deleting all allotted tasks for Day ${dayNum}. Tasks to delete count: ${tasksToDelete.length}`);
+
+      for (const t of tasksToDelete) {
+        await deleteTaskMutation.mutateAsync(t.id);
+      }
+
+      console.log(`[DEBUG] Deleted task count: ${tasksToDelete.length}`);
+
+      // Update local state by removing these tasks
+      const updatedModules = localModules.map(m => {
+        return {
+          ...m,
+          lessons: m.lessons?.map((l: any) => {
+            if (l.day_number === dayNum) {
+              return {
+                ...l,
+                tasks: []
+              };
+            }
+            return l;
+          }) || []
+        };
+      });
+
+      setLocalModules(updatedModules);
+
+      // Recompile routine HTML (will be empty)
+      const html = generateRoutineHtml([]);
+
+      // Save description to all chamber lessons of that day
+      for (const m of updatedModules) {
+        const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+        if (lesson) {
+          const { tasks, ...payload } = lesson;
+          await saveLessonMutation.mutateAsync({
+            ...payload,
+            description: html
+          });
+        }
+      }
+
+      // Update local state descriptions
+      setLocalModules(prev => prev.map(m => ({
+        ...m,
+        lessons: m.lessons?.map((l: any) => 
+          l.day_number === dayNum ? { ...l, description: html } : l
+        ) || []
+      })));
+
+      setNotification({ open: true, message: `All allotted tasks for Day ${dayNum} have been deleted.`, severity: 'success' });
+    } catch (err: any) {
+      console.error(err);
+      setNotification({ open: true, message: `Failed to delete lesson tasks: ${err.message || err}`, severity: 'error' });
+    }
+  };
+
+  const handleClearWindow = async (dayNum: number, windowName: string) => {
+    if (!window.confirm(`Are you sure you want to clear all tasks in ${windowName} for Day ${dayNum}?`)) return;
+
+    try {
+      const tasksToDelete: any[] = [];
+      localModules.forEach(m => {
+        const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+        lesson?.tasks?.forEach((t: any) => {
+          if (t.content?.routine_window === windowName) {
+            tasksToDelete.push({ id: t.id, lessonId: lesson.id });
+          }
+        });
+      });
+
+      console.log(`[DEBUG] Clearing window ${windowName} for Day ${dayNum}. Tasks to delete count: ${tasksToDelete.length}`);
+
+      for (const t of tasksToDelete) {
+        await deleteTaskMutation.mutateAsync(t.id);
+      }
+
+      console.log(`[DEBUG] Deleted task count: ${tasksToDelete.length}`);
+
+      // Update local state by filtering out cleared tasks
+      const updatedModules = localModules.map(m => {
+        return {
+          ...m,
+          lessons: m.lessons?.map((l: any) => {
+            if (l.day_number === dayNum) {
+              return {
+                ...l,
+                tasks: l.tasks?.filter((t: any) => t.content?.routine_window !== windowName) || []
+              };
+            }
+            return l;
+          }) || []
+        };
+      });
+
+      setLocalModules(updatedModules);
+
+      // Recompile routine HTML
+      const allDayTasks: any[] = [];
+      updatedModules.forEach(m => {
+        const chamberKey = matchChamberKey(m.title);
+        if (!chamberKey) return;
+        const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+        lesson?.tasks?.forEach((t: any) => {
+          allDayTasks.push({ ...t, chamberKey, chamberName: m.title });
+        });
+      });
+
+      const routineWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
+      const routineData = routineWindows.map(win => {
+        const tasks = allDayTasks.filter(t => t.content?.routine_window === win);
+        if (tasks.length === 0) return null;
+
+        const anchor = tasks.map(t => t.title).join(' · ');
+        const instruction = tasks.map(t => `<p>${t.description || t.content?.text || ''}</p>`).join('');
+
+        const systemName = win === 'Morning' ? 'Mental Clarity' : 
+                           win === 'Mid-Morning' ? 'The Frequency Field' :
+                           win === 'Midday' ? 'The Plate' :
+                           win === 'Afternoon' ? 'Breath Atelier' :
+                           win === 'Evening' ? 'The Signature' : 'Sleep Cocoon';
+
+        return {
+          window: win,
+          system: systemName,
+          anchor,
+          instruction
+        };
+      }).filter(Boolean);
+
+      const html = generateRoutineHtml(routineData as any);
+
+      // Save description to all chamber lessons of that day
+      for (const m of updatedModules) {
+        const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+        if (lesson) {
+          const { tasks, ...payload } = lesson;
+          await saveLessonMutation.mutateAsync({
+            ...payload,
+            description: html
+          });
+        }
+      }
+
+      setLocalModules(prev => prev.map(m => ({
+        ...m,
+        lessons: m.lessons?.map((l: any) => 
+          l.day_number === dayNum ? { ...l, description: html } : l
+        ) || []
+      })));
+
+      setNotification({ open: true, message: `Cleared all tasks in ${windowName} for Day ${dayNum}.`, severity: 'success' });
+    } catch (err: any) {
+      console.error(err);
+      setNotification({ open: true, message: `Failed to clear window: ${err.message || err}`, severity: 'error' });
+    }
+  };
+
+  const runCleanupSystem = async (modules: any[], durationDays: number) => {
+    let ghostCleanupCount = 0;
+    const tasksToDelete: string[] = [];
+
+    modules.forEach(m => {
+      const chamberKey = matchChamberKey(m.title);
+      const isBrokenChamber = !chamberKey;
+
+      m.lessons?.forEach((l: any) => {
+        const isInvalidLesson = l.day_number > durationDays || l.day_number < 0;
+
+        l.tasks?.forEach((t: any) => {
+          const isLegacy = t.title.includes('Chamber Task') || !!t.title.match(/Chamber Task/i);
+          
+          if (isBrokenChamber || isInvalidLesson || isLegacy) {
+            tasksToDelete.push(t.id);
+          }
+        });
+      });
+    });
+
+    if (tasksToDelete.length > 0) {
+      console.log(`[DEBUG] Safe Cleanup System: Found ${tasksToDelete.length} stale/ghost/legacy tasks to delete.`);
+      for (const id of tasksToDelete) {
+        try {
+          await deleteTaskMutation.mutateAsync(id);
+          ghostCleanupCount++;
+        } catch (err) {
+          console.error(`[DEBUG] Safe Cleanup System: Failed to delete ghost task ${id}:`, err);
+        }
+      }
+      console.log(`[DEBUG] Ghost task cleanup count: ${ghostCleanupCount}`);
+    } else {
+      console.log(`[DEBUG] Ghost task cleanup count: 0 (No stale tasks found)`);
+    }
+
+    return ghostCleanupCount;
+  };
+
   const { data: programDetails, isLoading: isLoadingDetails } = useProgramDetails(programId || '');
 
   const [programData, setProgramData] = useState({
@@ -586,7 +810,59 @@ const ProgramBuilder = () => {
         cover_image: programDetails.cover_image || '',
         is_published: programDetails.is_published || false
       });
-      setLocalModules(programDetails.modules || []);
+
+      // Log debugging details: Fetched tasks (Task 6)
+      const chamberPoolTasks: any[] = [];
+      const allottedTasks: any[] = [];
+      programDetails.modules?.forEach((m: any) => {
+        m.lessons?.forEach((l: any) => {
+          if (l.day_number === 0) {
+            chamberPoolTasks.push(...(l.tasks || []));
+          } else {
+            allottedTasks.push(...(l.tasks || []));
+          }
+        });
+      });
+      console.log(`[DEBUG] Fetched Chamber Tasks (Pool):`, chamberPoolTasks);
+      console.log(`[DEBUG] Fetched Allotted Tasks (Day Lessons):`, allottedTasks);
+
+      // Filter out ghost and stale tasks for UI rendering immediately (Task 2)
+      const durationDays = programDetails.duration_days || 30;
+      const cleanedModules = (programDetails.modules || []).map((m: any) => {
+        const chamberKey = matchChamberKey(m.title);
+        if (!chamberKey) {
+          return {
+            ...m,
+            lessons: []
+          };
+        }
+
+        return {
+          ...m,
+          lessons: (m.lessons || []).map((l: any) => {
+            const isInvalidLesson = l.day_number > durationDays || l.day_number < 0;
+            if (isInvalidLesson) {
+              return {
+                ...l,
+                tasks: []
+              };
+            }
+
+            return {
+              ...l,
+              tasks: (l.tasks || []).filter((t: any) => {
+                const isLegacy = t.title.includes('Chamber Task') || !!t.title.match(/Chamber Task/i);
+                return !isLegacy;
+              })
+            };
+          })
+        };
+      });
+
+      setLocalModules(cleanedModules);
+
+      // Run database cleanup in the background
+      runCleanupSystem(programDetails.modules || [], durationDays);
     } else {
       setProgramData({
         title: '',
@@ -606,7 +882,7 @@ const ProgramBuilder = () => {
     if (!programData.title && !overrides.title) return;
 
     // Prevent multiple simultaneous saves for new programs to avoid duplicate records
-    if (!programId && saveProgramMutation.isPending) return;
+    if (!programId && (saveProgramMutation.isPending || publishing)) return;
 
     try {
       const payload = {
@@ -615,7 +891,14 @@ const ProgramBuilder = () => {
         id: programId || undefined
       };
 
-      const saved = await saveProgramMutation.mutateAsync(payload);
+      // Wrap with 5 second timeout to prevent infinite hanging
+      const savePromise = saveProgramMutation.mutateAsync(payload);
+      const saved = await Promise.race([
+        savePromise,
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Save request timed out. Please check your Supabase connection and try again.')), 5000)
+        )
+      ]);
 
       // Update local state with the result from the DB
       if (saved) {
@@ -643,25 +926,31 @@ const ProgramBuilder = () => {
 
   const handlePublish = async () => {
     try {
+      setPublishing(true);
       const saved = await handleSave({ is_published: true });
       setNotification({ open: true, message: 'Program published and live!', severity: 'success' });
       if (saved) {
         setActiveTab('created');
       }
     } catch (err) {
-      // Error handled in handleSave
+      console.error(err);
+    } finally {
+      setPublishing(false);
     }
   };
 
   const handleSaveDraft = async () => {
     try {
+      setPublishing(true);
       const saved = await handleSave({ is_published: false });
       setNotification({ open: true, message: 'Draft saved successfully.', severity: 'success' });
       if (saved) {
         setActiveTab('created');
       }
     } catch (err) {
-      // Error handled in handleSave
+      console.error(err);
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -734,30 +1023,6 @@ const ProgramBuilder = () => {
     }
   };
 
-  const handleAddTask = async (lessonId: string, type: 'checklist' | 'audio' | 'video' | 'text' = 'checklist') => {
-    try {
-      const newTask = await saveTaskMutation.mutateAsync({
-        lesson_id: lessonId,
-        title: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
-        type,
-        order_index: 0,
-        content: {}
-      });
-
-      // Update local state to reflect new task
-      setLocalModules(prev => prev.map(m => ({
-        ...m,
-        lessons: m.lessons?.map((l: any) =>
-          l.id === lessonId ? { ...l, tasks: [...(l.tasks || []), newTask] } : l
-        )
-      })));
-
-      setNotification({ open: true, message: 'Task added!', severity: 'success' });
-    } catch (err) {
-      setNotification({ open: true, message: 'Failed to add task.', severity: 'error' });
-    }
-  };
-
   const handleDeleteTask = async (lessonId: string, taskId: string) => {
     try {
       await deleteTaskMutation.mutateAsync(taskId);
@@ -773,42 +1038,6 @@ const ProgramBuilder = () => {
     } catch (err: any) {
       console.error('Task deletion failed:', err);
       setNotification({ open: true, message: `Failed to delete task: ${err.message || 'Unknown error'}`, severity: 'error' });
-    }
-  };
-
-  const handleFileUpload = async (lessonId: string, task: any, file: File) => {
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${task.id}-${Date.now()}.${fileExt}`;
-      const bucket = 'program-assets';
-
-      const publicUrl = await uploadAssetMutation.mutateAsync({
-        file,
-        bucket,
-        path: `tasks/${fileName}`
-      });
-
-      const updatedTask = {
-        ...task,
-        content: { ...task.content, url: publicUrl }
-      };
-
-      await saveTaskMutation.mutateAsync(updatedTask);
-
-      setLocalModules(prev => prev.map(m => ({
-        ...m,
-        lessons: m.lessons?.map((l: any) =>
-          l.id === lessonId ? {
-            ...l,
-            tasks: l.tasks?.map((t: any) => t.id === task.id ? updatedTask : t)
-          } : l
-        )
-      })));
-
-      setNotification({ open: true, message: 'File uploaded successfully!', severity: 'success' });
-    } catch (err) {
-      console.error(err);
-      setNotification({ open: true, message: 'Upload failed. Ensure bucket "program-assets" exists.', severity: 'error' });
     }
   };
 
@@ -1162,16 +1391,6 @@ const ProgramBuilder = () => {
     }
   };
 
-  const persistTask = async (task: any) => {
-    try {
-      await saveTaskMutation.mutateAsync(task);
-      await syncLessonRoutine(task.lesson_id);
-      setNotification({ open: true, message: 'Task updated.', severity: 'success' });
-    } catch (err) {
-      setNotification({ open: true, message: 'Failed to update task.', severity: 'error' });
-    }
-  };
-
   const handleImportSuccess = async (compiled: any) => {
     try {
       const savedProgram = await handleSave({
@@ -1209,16 +1428,16 @@ const ProgramBuilder = () => {
           <Button
             variant="outlined"
             onClick={handleSaveDraft}
-            disabled={saveProgramMutation.isPending || !programData.title}
+            disabled={saveProgramMutation.isPending || publishing || !programData.title}
             sx={{ color: '#B0B0B0', borderColor: 'rgba(255, 255, 255, 0.1)' }}
           >
             Save Draft
           </Button>
           <Button
             variant="contained"
-            startIcon={saveProgramMutation.isPending ? <CircularProgress size={18} color="inherit" /> : <Save size={18} />}
+            startIcon={saveProgramMutation.isPending || publishing ? <CircularProgress size={18} color="inherit" /> : <Save size={18} />}
             onClick={handlePublish}
-            disabled={saveProgramMutation.isPending || !programData.title}
+            disabled={saveProgramMutation.isPending || publishing || !programData.title}
             sx={{
               backgroundColor: 'var(--emerald-primary)',
               color: '#0B0B0F',
@@ -1227,7 +1446,7 @@ const ProgramBuilder = () => {
               '&.Mui-disabled': { backgroundColor: 'var(--emerald-mid)', opacity: 0.5 }
             }}
           >
-            {saveProgramMutation.isPending ? 'Publishing...' : 'Publish Program'}
+            {saveProgramMutation.isPending || publishing ? 'Publishing...' : 'Publish Program'}
           </Button>
         </Stack>
       </Box>
@@ -1552,6 +1771,10 @@ const ProgramBuilder = () => {
                     const dayTasks: any[] = [];
                     localModules.forEach(m => {
                       const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+                      if (lesson) {
+                        // Task 6: Temporarily log Lesson ID and Day number
+                        console.log(`[DEBUG] Lesson ID: ${lesson.id}, Day number: ${dayNum}`);
+                      }
                       lesson?.tasks?.forEach((t: any) => {
                         dayTasks.push({
                           ...t,
@@ -1571,28 +1794,51 @@ const ProgramBuilder = () => {
                           borderRadius: 2
                         }}
                       >
-                        <Box sx={{ mb: 2 }}>
-                          <TextField
-                            variant="standard"
-                            value={dayTitles[dayNum] !== undefined ? dayTitles[dayNum] : `Day ${dayNum}: Protocol Allotment`}
-                            onChange={(e) => setDayTitles(prev => ({ ...prev, [dayNum]: e.target.value }))}
-                            onBlur={(e) => handleUpdateDayTitle(dayNum, e.target.value)}
-                            slotProps={{
-                              input: {
-                                sx: {
-                                  fontSize: '1.25rem',
-                                  fontWeight: 800,
-                                  color: 'var(--emerald-primary)',
-                                  borderBottom: '1px dashed rgba(16, 185, 129, 0.3)',
-                                  '&:hover': { borderBottom: '1px dashed var(--emerald-primary)' }
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                          <Box sx={{ flexGrow: 1, mr: 2 }}>
+                            <TextField
+                              variant="standard"
+                              value={dayTitles[dayNum] !== undefined ? dayTitles[dayNum] : `Day ${dayNum}: Protocol Allotment`}
+                              onChange={(e) => setDayTitles(prev => ({ ...prev, [dayNum]: e.target.value }))}
+                              onBlur={(e) => handleUpdateDayTitle(dayNum, e.target.value)}
+                              slotProps={{
+                                input: {
+                                  sx: {
+                                    fontSize: '1.25rem',
+                                    fontWeight: 800,
+                                    color: 'var(--emerald-primary)',
+                                    borderBottom: '1px dashed rgba(16, 185, 129, 0.3)',
+                                    '&:hover': { borderBottom: '1px dashed var(--emerald-primary)' }
+                                  }
                                 }
-                              }
-                            }}
-                            fullWidth
-                          />
-                          <Typography variant="caption" sx={{ color: '#B0B0B0', mt: 1, display: 'block' }}>
-                            Rename the title above. Allot tasks configured in the Chambers for this day.
-                          </Typography>
+                              }}
+                              fullWidth
+                            />
+                            <Typography variant="caption" sx={{ color: '#B0B0B0', mt: 1, display: 'block' }}>
+                              Rename the title above. Allot tasks configured in the Chambers for this day.
+                            </Typography>
+                          </Box>
+                          {dayTasks.length > 0 && (
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => openDeleteAllDialog(dayNum)}
+                              sx={{
+                                color: '#ff4d4d',
+                                borderColor: 'rgba(212, 175, 55, 0.3)',
+                                fontWeight: 700,
+                                textTransform: 'none',
+                                whiteSpace: 'nowrap',
+                                '&:hover': {
+                                  borderColor: '#D4AF37',
+                                  backgroundColor: 'rgba(255, 77, 77, 0.05)',
+                                  color: '#f44336'
+                                }
+                              }}
+                            >
+                              Delete All Lesson Tasks
+                            </Button>
+                          )}
                         </Box>
 
                         {/* Task Allotment Form for this Day */}
@@ -1698,9 +1944,31 @@ const ProgramBuilder = () => {
                                     minHeight: 120
                                   }}
                                 >
-                                  <Typography variant="subtitle2" sx={{ color: windowName === 'Unassigned' ? '#888' : '#D4AF37', fontWeight: 800, mb: 2 }}>
-                                    {windowName.toUpperCase()} {windowName === 'Unassigned' && '(NOT ALLOTTED)'}
-                                  </Typography>
+                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                    <Typography variant="subtitle2" sx={{ color: windowName === 'Unassigned' ? '#888' : '#D4AF37', fontWeight: 800 }}>
+                                      {windowName.toUpperCase()} {windowName === 'Unassigned' && '(NOT ALLOTTED)'}
+                                    </Typography>
+                                    {windowName !== 'Unassigned' && windowTasks.length > 0 && (
+                                      <Button
+                                        size="small"
+                                        startIcon={<Trash2 size={12} />}
+                                        onClick={() => handleClearWindow(dayNum, windowName)}
+                                        sx={{
+                                          color: '#ff4d4d',
+                                          fontSize: '0.7rem',
+                                          textTransform: 'none',
+                                          p: 0.5,
+                                          minWidth: 0,
+                                          '&:hover': {
+                                            backgroundColor: 'rgba(255, 77, 77, 0.05)',
+                                            color: '#ff3333'
+                                          }
+                                        }}
+                                      >
+                                        Clear Window
+                                      </Button>
+                                    )}
+                                  </Box>
 
                                   <Stack spacing={2}>
                                     {windowTasks.map((task: any) => (
@@ -1792,6 +2060,47 @@ const ProgramBuilder = () => {
         programId={programId}
         onImportSuccess={handleImportSuccess}
       />
+
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        slotProps={{
+          paper: {
+            sx: { 
+              backgroundColor: '#121217', 
+              border: '1px solid rgba(255, 77, 77, 0.2)', 
+              minWidth: 400 
+            }
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#ff4d4d' }}>
+          Delete All Lesson Tasks?
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: '#B0B0B0', mb: 2 }}>
+            This will remove all allotted tasks from this lesson/day. 
+            Chamber Pool tasks will NOT be deleted. Only lesson allocations will be removed.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setDeleteConfirmOpen(false)} sx={{ color: '#B0B0B0' }}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmDeleteAll}
+            sx={{ 
+              backgroundColor: '#ff4d4d', 
+              color: '#ffffff', 
+              fontWeight: 700,
+              '&:hover': {
+                backgroundColor: '#e60000'
+              }
+            }}
+          >
+            Delete All
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={notification.open}

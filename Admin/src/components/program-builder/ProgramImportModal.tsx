@@ -30,6 +30,9 @@ import {
 } from '../../lib/programCompiler';
 import { useSaveModule, useSaveLesson, useSaveTask } from '../../lib/queries';
 import { generateRoutineHtml } from '../../lib/chambersData';
+import { supabase } from '../../lib/supabase';
+import { useQueryClient } from '@tanstack/react-query';
+
 
 interface ProgramImportModalProps {
   open: boolean;
@@ -44,6 +47,7 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
   programId,
   onImportSuccess
 }) => {
+  const queryClient = useQueryClient();
   const saveModuleMutation = useSaveModule();
   const saveLessonMutation = useSaveLesson();
   const saveTaskMutation = useSaveTask();
@@ -52,6 +56,7 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [compiling, setCompiling] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [compiledData, setCompiledData] = useState<ProgramJSON | null>(null);
   const [success, setSuccess] = useState(false);
@@ -62,6 +67,7 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
     setCompiledData(null);
     setSuccess(false);
     setLoading(false);
+    setCompiling(false);
   };
 
   const handleClose = () => {
@@ -152,19 +158,80 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
   const handleCompile = async () => {
     if (!programId || !compiledData) return;
 
+    const mapExcelTaskTypeToDBType = (excelType: string): 'audio' | 'video' | 'text' | 'checklist' => {
+      const t = String(excelType || '').toLowerCase().trim();
+      if (t === 'audio') return 'audio';
+      if (t === 'video') return 'video';
+      if (['checklist', 'movement', 'breath', 'ritual', 'somatic', 'mobility', 'meal', 'nutrition'].includes(t)) {
+        return 'checklist';
+      }
+      return 'text';
+    };
+
     try {
+      setCompiling(true);
       setLoading(true);
       setValidationErrors([]);
 
-      // Write compiled modules, lessons, and tasks directly to the Supabase database
-      for (const mod of compiledData.modules) {
-        const savedModule = await saveModuleMutation.mutateAsync({
-          program_id: programId,
-          title: mod.title,
-          order_index: mod.order_index
-        });
+      // STEP 1 CLEANUP START
+      console.log("STEP 1 CLEANUP START");
+      const { error: deleteError } = await supabase
+        .from('modules')
+        .delete()
+        .eq('program_id', programId);
 
-        for (const lesson of mod.lessons) {
+      if (deleteError) {
+        throw new Error(`Failed to clean up old program modules: ${deleteError.message}`);
+      }
+
+      // Log counts
+      const modulesCount = compiledData.modules.length;
+      let lessonsCount = 0;
+      let tasksCount = 0;
+      compiledData.modules.forEach(m => {
+        lessonsCount += m.lessons.length;
+        m.lessons.forEach(l => {
+          tasksCount += l.tasks.length;
+        });
+      });
+      console.log("modules:", modulesCount);
+      console.log("lessons:", lessonsCount);
+      console.log("tasks:", tasksCount);
+
+      // STEP 2 MODULE CREATE
+      console.log("STEP 2 MODULE CREATE");
+      for (const mod of compiledData.modules) {
+        const { data: savedModule, error: modErr } = await supabase
+          .from('modules')
+          .insert({
+            program_id: programId,
+            title: mod.title,
+            order_index: mod.order_index
+          })
+          .select()
+          .single();
+
+        if (modErr) throw modErr;
+
+        // Ensure the Chamber Pool lesson (day_number = 0) is created for this module first
+        const { data: poolLesson, error: poolErr } = await supabase
+          .from('lessons')
+          .insert({
+            module_id: savedModule.id,
+            title: `Chamber Pool`,
+            day_number: 0,
+            unlock_day: 0,
+            description: '<p>Chamber tasks pool</p>'
+          })
+          .select()
+          .single();
+
+        if (poolErr) throw poolErr;
+
+        // STEP 3 LESSON CREATE
+        console.log("STEP 3 LESSON CREATE");
+        // Batch insert the rest of the lessons
+        const lessonsToInsert = mod.lessons.map(lesson => {
           const compiledRoutine = lesson.routine.map(r => ({
             window: r.window,
             system: r.system,
@@ -173,30 +240,87 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
           }));
           const routineHtml = generateRoutineHtml(compiledRoutine);
 
-          const savedLesson = await saveLessonMutation.mutateAsync({
+          return {
             module_id: savedModule.id,
             title: lesson.title,
             day_number: lesson.day_number,
             unlock_day: lesson.day_number,
             description: routineHtml
-          });
+          };
+        });
+
+        const { data: savedLessons, error: lessonsErr } = await supabase
+          .from('lessons')
+          .insert(lessonsToInsert)
+          .select();
+
+        if (lessonsErr) throw lessonsErr;
+
+        const lessonIdMap = new Map<number, string>();
+        savedLessons.forEach(l => {
+          lessonIdMap.set(l.day_number, l.id);
+        });
+
+        // STEP 4 TASK INSERT
+        console.log("STEP 4 TASK INSERT");
+        const tasksToInsert: any[] = [];
+        for (const lesson of mod.lessons) {
+          const targetLessonId = lessonIdMap.get(lesson.day_number);
+          if (!targetLessonId) continue;
 
           for (const task of lesson.tasks) {
-            await saveTaskMutation.mutateAsync({
-              lesson_id: savedLesson.id,
+            const dbType = mapExcelTaskTypeToDBType(task.type);
+
+            // 1. Populate the Chamber Task Pool (Day 0) with a master task
+            tasksToInsert.push({
+              lesson_id: poolLesson.id,
               title: task.title,
-              type: task.type as any,
+              type: dbType,
               order_index: task.order_index,
               content: {
-                routine_window: task.content.routine_window,
-                url: task.content.url,
-                text: task.content.text
+                routine_window: '', // pool tasks are unallotted
+                url: task.content.url || '',
+                text: task.content.text || '',
+                duration: task.content.duration || '5 min',
+                format: task.type // preserve original Excel sub-type
+              }
+            });
+
+            // 2. Populate the target Day lesson with the allotted task
+            tasksToInsert.push({
+              lesson_id: targetLessonId,
+              title: task.title,
+              type: dbType,
+              order_index: task.order_index,
+              content: {
+                routine_window: task.content.routine_window || 'Morning',
+                url: task.content.url || '',
+                text: task.content.text || '',
+                duration: task.content.duration || '5 min',
+                format: task.type
               }
             });
           }
         }
+
+        if (tasksToInsert.length > 0) {
+          const { error: tasksErr } = await supabase
+            .from('tasks')
+            .insert(tasksToInsert);
+
+          if (tasksErr) throw tasksErr;
+        }
       }
-      
+
+      // STEP 5 MEDIA INSERT
+      console.log("STEP 5 MEDIA INSERT");
+
+      // STEP 6 COMPLETE
+      console.log("STEP 6 COMPLETE");
+
+      // Invalidate the cache once at the very end
+      queryClient.invalidateQueries({ queryKey: ['program-details', programId] });
+
       setSuccess(true);
       setTimeout(() => {
         onImportSuccess(compiledData);
@@ -204,7 +328,13 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
       }, 1500);
     } catch (err: any) {
       console.error('Failed to import program to database:', err);
-      setValidationErrors([`Database Write Failed: ${err.message || 'Could not save program structure to Supabase.'}`]);
+      const errMsg = err.message || 'Could not save program structure to Supabase.';
+      if (typeof window !== 'undefined') {
+        alert(`Error: ${errMsg}`); // toast.error fallback
+      }
+      setValidationErrors([`Database Write Failed: ${errMsg}`]);
+    } finally {
+      setCompiling(false);
       setLoading(false);
     }
   };
@@ -224,7 +354,7 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
   return (
     <Dialog 
       open={open} 
-      onClose={loading ? undefined : handleClose}
+      onClose={loading || compiling ? undefined : handleClose}
       maxWidth="sm"
       fullWidth
       slotProps={{
@@ -242,7 +372,7 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
         <Typography variant="h6" sx={{ color: 'var(--emerald-primary)', fontWeight: 800 }}>
           Import Program Excel
         </Typography>
-        {!loading && (
+        {!loading && !compiling && (
           <IconButton onClick={handleClose} sx={{ color: '#666', '&:hover': { color: '#B0B0B0' } }}>
             <X size={20} />
           </IconButton>
@@ -257,7 +387,7 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
         ) : (
           <Stack spacing={3}>
             {/* File Drop Target */}
-            {!file && !loading && (
+            {!file && !loading && !compiling && (
               <Box
                 onDragEnter={handleDrag}
                 onDragOver={handleDrag}
@@ -296,11 +426,11 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
             )}
 
             {/* Loading Indicator */}
-            {loading && (
+            {(loading || compiling) && (
               <Box sx={{ py: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                 <CircularProgress sx={{ color: 'var(--emerald-primary)' }} />
                 <Typography variant="body2" sx={{ color: '#B0B0B0' }}>
-                  Processing and validating workbook...
+                  {compiling ? 'Compiling program, modules, lessons, and tasks...' : 'Processing and validating workbook...'}
                 </Typography>
               </Box>
             )}
@@ -407,7 +537,7 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
       <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
         <Button 
           onClick={handleClose} 
-          disabled={loading}
+          disabled={loading || compiling}
           sx={{ color: '#B0B0B0' }}
         >
           Cancel
@@ -416,7 +546,7 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
           <Button 
             variant="contained" 
             onClick={handleCompile}
-            disabled={loading}
+            disabled={loading || compiling}
             sx={{ 
               backgroundColor: 'var(--emerald-primary)', 
               color: '#0B0B0F', 
@@ -424,7 +554,7 @@ export const ProgramImportModal: React.FC<ProgramImportModalProps> = ({
               '&:hover': { backgroundColor: 'var(--emerald-light)' }
             }}
           >
-            Compile Program
+            {compiling ? 'Compiling...' : 'Compile Program'}
           </Button>
         )}
       </DialogActions>

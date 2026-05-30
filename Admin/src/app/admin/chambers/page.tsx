@@ -157,6 +157,13 @@ const ChamberPage = () => {
     (less: any) => less.day_number === dayNumber
   );
 
+  // Debugging logs to inspect fetch parameters and returned database records
+  console.log(`[DEBUG] selectedProgramId:`, selectedProgramId);
+  console.log(`[DEBUG] chamberId:`, chamberId);
+  console.log(`[DEBUG] matchedModule:`, matchedModule);
+  console.log(`[DEBUG] matchedLesson (Day ${dayNumber}):`, matchedLesson);
+  console.log(`[DEBUG] returnedTasks:`, matchedLesson?.tasks);
+
   // Handle module initialization
   const handleInitializeModule = async () => {
     if (!selectedProgramId) return;
