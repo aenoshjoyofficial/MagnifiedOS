@@ -44,25 +44,8 @@ const MyProgram = () => {
 
   const { data: enrollment, isLoading } = useMyEnrollment(targetUserId || '');
 
-  if (isLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-        <CircularProgress sx={{ color: '#D4AF37' }} />
-      </Box>
-    );
-  }
-
-  if (!enrollment) {
-    return (
-      <Box sx={{ p: 4, textAlign: 'center' }}>
-        <Typography variant="h5">No active program found.</Typography>
-        <Typography variant="body2" sx={{ color: '#666', mt: 1 }}>Please enroll in a program from the admin panel.</Typography>
-      </Box>
-    );
-  }
-
-  const program = enrollment.programs;
-  const completions = enrollment.task_completions || [];
+  const program = enrollment?.programs;
+  const completions = enrollment?.task_completions || [];
   
   // Create a map of task ID to its title and day number for easy lookup
   const taskMap = React.useMemo(() => {
@@ -90,6 +73,23 @@ const MyProgram = () => {
     });
     return keys;
   }, [completions, taskMap]);
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+        <CircularProgress sx={{ color: '#D4AF37' }} />
+      </Box>
+    );
+  }
+
+  if (!enrollment) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center' }}>
+        <Typography variant="h5">No active program found.</Typography>
+        <Typography variant="body2" sx={{ color: '#666', mt: 1 }}>Please enroll in a program from the admin panel.</Typography>
+      </Box>
+    );
+  }
 
   // Logic to determine status for modules and days
   const getModuleStatus = (module: any) => {
