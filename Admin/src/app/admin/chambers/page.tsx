@@ -18,7 +18,8 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Chip
 } from '@mui/material';
 import { 
   ArrowLeft, 
@@ -174,12 +175,35 @@ const ChamberPage = () => {
     (less: any) => less.day_number === dayNumber
   );
 
+  const allChamberTasks = React.useMemo(() => {
+    if (!matchedModule || !matchedModule.lessons) return [];
+    const tasksList: any[] = [];
+    matchedModule.lessons.forEach((lesson: any) => {
+      if (lesson.tasks) {
+        lesson.tasks.forEach((task: any) => {
+          tasksList.push({
+            ...task,
+            dayNumber: lesson.day_number,
+            lessonTitle: lesson.title
+          });
+        });
+      }
+    });
+    return tasksList.sort((a, b) => {
+      if (a.dayNumber !== b.dayNumber) {
+        return a.dayNumber - b.dayNumber;
+      }
+      return (a.order_index || 0) - (b.order_index || 0);
+    });
+  }, [matchedModule]);
+
   // Debugging logs to inspect fetch parameters and returned database records
   console.log(`[DEBUG] selectedProgramId:`, selectedProgramId);
   console.log(`[DEBUG] chamberId:`, chamberId);
   console.log(`[DEBUG] matchedModule:`, matchedModule);
   console.log(`[DEBUG] matchedLesson (Day ${dayNumber}):`, matchedLesson);
   console.log(`[DEBUG] returnedTasks:`, matchedLesson?.tasks);
+  console.log(`[DEBUG] allChamberTasks:`, allChamberTasks);
 
   // Handle module initialization
   const handleInitializeModule = async () => {
@@ -555,17 +579,17 @@ const ChamberPage = () => {
             {/* Tasks List */}
             <Paper sx={{ p: 3, border: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: 'rgba(255, 255, 255, 0.01)' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 2 }}>
-                Chamber Tasks Pool
+                Tasks Pool & Allotted Tasks
               </Typography>
               <Divider sx={{ mb: 2 }} />
 
-              {!matchedLesson || !matchedLesson.tasks || matchedLesson.tasks.length === 0 ? (
+              {allChamberTasks.length === 0 ? (
                 <Typography variant="body2" sx={{ color: '#666', py: 2, textAlign: 'center' }}>
                   No tasks added to this chamber yet. Use the form above to add a task.
                 </Typography>
               ) : (
                 <Stack spacing={2}>
-                  {matchedLesson.tasks.map((task: any) => (
+                  {allChamberTasks.map((task: any) => (
                     <Box 
                       key={task.id}
                       sx={{ 
@@ -587,9 +611,22 @@ const ChamberPage = () => {
                           {task.type === 'text' && <FileText size={18} />}
                         </Box>
                         <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 700 }}>{task.title}</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>{task.title}</Typography>
+                            <Chip 
+                              label={task.dayNumber === 0 ? "Chamber Pool" : `Day ${task.dayNumber}`}
+                              size="small"
+                              sx={{ 
+                                backgroundColor: task.dayNumber === 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(212, 175, 55, 0.1)',
+                                color: task.dayNumber === 0 ? 'var(--emerald-primary)' : '#D4AF37',
+                                fontSize: '0.65rem',
+                                fontWeight: 700,
+                                height: 20
+                              }}
+                            />
+                          </Box>
                           {task.description && (
-                            <Typography variant="caption" sx={{ color: '#B0B0B0', display: 'block' }}>
+                            <Typography variant="caption" sx={{ color: '#B0B0B0', display: 'block', mt: 0.5 }}>
                               {task.description}
                             </Typography>
                           )}
