@@ -50,7 +50,7 @@ import {
   useDeleteTask,
   useUploadAsset
 } from '@/lib/queries';
-import { CHAMBERS_INFO, matchChamberKey } from '@/lib/chambersData';
+import { CHAMBERS_INFO, matchChamberKey, generateRoutineHtml } from '@/lib/chambersData';
 
 // Map chamber ID to its visual icon
 const getChamberIcon = (chamberId: string) => {
@@ -389,6 +389,79 @@ const ChamberPage = () => {
         content: updatedContent,
         order_index: editingTask.order_index
       });
+
+      // 3. Re-compile the routine HTML descriptions for all daily lessons in this module
+      if (matchedModule?.id) {
+        const { data: lessonsWithTasks } = await supabase
+          .from('lessons')
+          .select(`
+            id,
+            title,
+            day_number,
+            tasks (*)
+          `)
+          .eq('module_id', matchedModule.id)
+          .gt('day_number', 0);
+
+        if (lessonsWithTasks && lessonsWithTasks.length > 0) {
+          for (const lesson of lessonsWithTasks) {
+            const allDayTasks = (lesson.tasks || []).map((t: any) => {
+              if (t.id === editingTask.id) {
+                return {
+                  ...t,
+                  title: editTitle.trim(),
+                  description: editDescription.trim(),
+                  type: dbType,
+                  content: updatedContent
+                };
+              }
+              if (t.title === editingTask.title) {
+                return {
+                  ...t,
+                  title: editTitle.trim(),
+                  description: editDescription.trim(),
+                  type: dbType,
+                  content: updatedContent
+                };
+              }
+              return t;
+            });
+
+            // Re-compile routine HTML
+            const routineWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
+            const routineData = routineWindows.map(windowName => {
+              const tasks = allDayTasks.filter((t: any) => {
+                const taskWindow = t.content?.routine_window;
+                return taskWindow && taskWindow.toLowerCase() === windowName.toLowerCase();
+              });
+              if (tasks.length === 0) return null;
+
+              const anchor = tasks.map((t: any) => t.title).join(' · ');
+              const instruction = tasks.map((t: any) => `<p>${t.description || t.content?.text || ''}</p>`).join('');
+
+              const systemName = windowName === 'Morning' ? 'Mental Clarity' : 
+                                 windowName === 'Mid-Morning' ? 'The Frequency Field' :
+                                 windowName === 'Midday' ? 'The Plate' :
+                                 windowName === 'Afternoon' ? 'Breath Atelier' :
+                                 windowName === 'Evening' ? 'The Signature' : 'Sleep Cocoon';
+
+              return {
+                window: windowName,
+                system: systemName,
+                anchor,
+                instruction
+              };
+            }).filter(Boolean);
+
+            const html = generateRoutineHtml(routineData as any);
+
+            await supabase
+              .from('lessons')
+              .update({ description: html })
+              .eq('id', lesson.id);
+          }
+        }
+      }
 
       // Close dialog
       setIsEditDialogOpen(false);
