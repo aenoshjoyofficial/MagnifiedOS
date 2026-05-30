@@ -248,8 +248,8 @@ const UserManagement = () => {
         <Button variant="outlined" startIcon={<Filter size={18} />} sx={{ borderColor: 'rgba(255, 255, 255, 0.1)', color: '#B0B0B0' }}>Filter</Button>
       </Paper>
 
-      <Paper sx={{ overflow: 'hidden' }}>
-        <TableContainer>
+      <Paper sx={{ overflow: 'hidden', width: '100%' }}>
+        <TableContainer sx={{ overflowX: 'auto' }}>
           <Table>
             <TableHead sx={{ backgroundColor: 'rgba(255, 255, 255, 0.02)' }}>
               <TableRow>

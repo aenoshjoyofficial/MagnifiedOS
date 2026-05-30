@@ -11,7 +11,9 @@ import {
   Typography, 
   IconButton,
   Tooltip,
-  Divider
+  Divider,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import { 
   LayoutDashboard, 
@@ -56,17 +58,21 @@ const Sidebar = () => {
   const location = useLocation();
   const pathname = location.pathname;
   const { isSidebarOpen, toggleSidebar } = useUIStore();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const drawerWidth = isSidebarOpen ? 260 : 80;
 
   return (
     <Drawer
-      variant="permanent"
+      variant={isMobile ? "temporary" : "permanent"}
+      open={isMobile ? isSidebarOpen : undefined}
+      onClose={isMobile ? toggleSidebar : undefined}
       sx={{
-        width: drawerWidth,
+        width: isMobile ? 0 : drawerWidth,
         flexShrink: 0,
         '& .MuiDrawer-paper': {
-          width: drawerWidth,
+          width: isMobile ? 260 : drawerWidth,
           boxSizing: 'border-box',
           backgroundColor: '#0B0B0F',
           borderRight: '1px solid rgba(212, 175, 55, 0.1)',
@@ -75,8 +81,8 @@ const Sidebar = () => {
         },
       }}
     >
-      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', justifyContent: isSidebarOpen ? 'space-between' : 'center' }}>
-        {isSidebarOpen && (
+      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', justifyContent: (isSidebarOpen || isMobile) ? 'space-between' : 'center' }}>
+        {(isSidebarOpen || isMobile) && (
           <Link to="/admin" style={{ textDecoration: 'none' }}>
             <Typography variant="h6" sx={{ fontWeight: 800, color: '#D4AF37', letterSpacing: -0.5 }}>
               MAGNIFIED ADMIN
@@ -84,7 +90,11 @@ const Sidebar = () => {
           </Link>
         )}
         <IconButton onClick={toggleSidebar} size="small" sx={{ color: '#D4AF37' }}>
-          {isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+          {isMobile ? (
+            <ChevronLeft size={20} />
+          ) : (
+            isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />
+          )}
         </IconButton>
       </Box>
 

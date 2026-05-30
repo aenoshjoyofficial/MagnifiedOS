@@ -14,7 +14,11 @@ import {
   Divider, 
   IconButton, 
   Stack, 
-  Grid
+  Grid,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import { 
   ArrowLeft, 
@@ -32,8 +36,10 @@ import {
   Moon,
   Wind,
   Award,
-  Upload
+  Upload,
+  Edit
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { 
   usePrograms, 
   useProgramDetails, 
@@ -73,6 +79,17 @@ const ChamberPage = () => {
   const [taskType, setTaskType] = useState<'text' | 'audio' | 'video' | 'image' | 'pdf'>('text');
   const [taskDescription, setTaskDescription] = useState('');
   const [contentUrl, setContentUrl] = useState('');
+
+  // Task editing form state
+  const [editingTask, setEditingTask] = useState<any | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editType, setEditType] = useState<'text' | 'audio' | 'video' | 'image' | 'pdf'>('text');
+  const [editDescription, setEditDescription] = useState('');
+  const [editContentUrl, setEditContentUrl] = useState('');
+  const [editResourceUrl, setEditResourceUrl] = useState('');
+  const [editDuration, setEditDuration] = useState('');
+  const [editIsUploading, setEditIsUploading] = useState(false);
 
   // Placeholders mapping based on task type
   const placeholders = {
@@ -252,6 +269,108 @@ const ChamberPage = () => {
       } catch (err) {
         console.error('Failed to delete task:', err);
       }
+    }
+  };
+
+  // Open the edit task dialog and populate fields
+  const handleOpenEditDialog = (task: any) => {
+    setEditingTask(task);
+    setEditTitle(task.title || '');
+    setEditType((task.content?.format || task.type || 'text') as any);
+    setEditDescription(task.description || '');
+    setEditContentUrl(task.content?.url || '');
+    setEditResourceUrl(task.content?.resource_url || '');
+    setEditDuration(task.content?.duration || '');
+    setIsEditDialogOpen(true);
+  };
+
+  // Handle media file upload in the edit form
+  const handleEditFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setEditIsUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `chamber-task-${Date.now()}.${fileExt}`;
+      const bucket = 'program-assets';
+      
+      const publicUrl = await uploadAssetMutation.mutateAsync({
+        file,
+        bucket,
+        path: `tasks/${fileName}`
+      });
+
+      setEditContentUrl(publicUrl);
+    } catch (err) {
+      console.error('Upload failed:', err);
+      alert('Upload failed. Ensure bucket "program-assets" exists.');
+    } finally {
+      setEditIsUploading(false);
+    }
+  };
+
+  // Handle saving the task edits and syncing with siblings
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTask || !editTitle.trim()) return;
+
+    try {
+      const dbType = (editType === 'image' || editType === 'pdf') ? 'text' : editType;
+      const updatedContent = {
+        ...editingTask.content,
+        url: editContentUrl.trim(),
+        text: editDescription.trim(),
+        format: editType,
+        resource_url: editResourceUrl.trim(),
+        duration: editDuration.trim()
+      };
+
+      // 1. Get sibling tasks inside the same module that share the pre-edited title
+      if (matchedModule?.id) {
+        const { data: moduleLessons } = await supabase
+          .from('lessons')
+          .select('id')
+          .eq('module_id', matchedModule.id);
+
+        const lessonIds = moduleLessons?.map((l: any) => l.id) || [];
+        
+        if (lessonIds.length > 0) {
+          // Update all sibling tasks (excluding the current one to let saveTaskMutation handle it)
+          const { error: siblingError } = await supabase
+            .from('tasks')
+            .update({
+              title: editTitle.trim(),
+              description: editDescription.trim(),
+              type: dbType,
+              content: updatedContent
+            })
+            .in('lesson_id', lessonIds)
+            .eq('title', editingTask.title)
+            .neq('id', editingTask.id);
+
+          if (siblingError) {
+            console.error('Error updating sibling tasks:', siblingError);
+          }
+        }
+      }
+
+      // 2. Update the primary editing task (triggers onSuccess/invalidation)
+      await saveTaskMutation.mutateAsync({
+        id: editingTask.id,
+        lesson_id: editingTask.lesson_id,
+        title: editTitle.trim(),
+        description: editDescription.trim(),
+        type: dbType as any,
+        content: updatedContent,
+        order_index: editingTask.order_index
+      });
+
+      // Close dialog
+      setIsEditDialogOpen(false);
+      setEditingTask(null);
+    } catch (err) {
+      console.error('Failed to save edited task:', err);
     }
   };
 
@@ -477,14 +596,23 @@ const ChamberPage = () => {
                         </Box>
                       </Box>
 
-                      <IconButton 
-                        size="small" 
-                        onClick={() => handleDeleteTask(task.id)}
-                        disabled={deleteTaskMutation.isPending}
-                        sx={{ color: 'rgba(244, 67, 54, 0.5)', '&:hover': { color: '#f44336' } }}
-                      >
-                        <Trash2 size={16} />
-                      </IconButton>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleOpenEditDialog(task)}
+                          sx={{ color: 'rgba(255, 255, 255, 0.5)', '&:hover': { color: 'var(--emerald-primary)' } }}
+                        >
+                          <Edit size={16} />
+                        </IconButton>
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleDeleteTask(task.id)}
+                          disabled={deleteTaskMutation.isPending}
+                          sx={{ color: 'rgba(244, 67, 54, 0.5)', '&:hover': { color: '#f44336' } }}
+                        >
+                          <Trash2 size={16} />
+                        </IconButton>
+                      </Box>
                     </Box>
                   ))}
                 </Stack>
@@ -493,6 +621,159 @@ const ChamberPage = () => {
           </Stack>
         )}
       </Stack>
+
+      {/* Edit Task Dialog */}
+      <Dialog 
+        open={isEditDialogOpen} 
+        onClose={() => setIsEditDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              backgroundColor: '#1E1E1E',
+              backgroundImage: 'none',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              color: '#FFFFFF'
+            }
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, borderBottom: '1px solid rgba(255, 255, 255, 0.08)', pb: 2 }}>
+          Edit Task
+        </DialogTitle>
+        <Box component="form" onSubmit={handleSaveEdit}>
+          <DialogContent sx={{ py: 3 }}>
+            <Stack spacing={3}>
+              <TextField
+                fullWidth
+                required
+                size="small"
+                label="Task Title"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder={placeholders[editType]?.title}
+              />
+
+              <FormControl fullWidth size="small">
+                <InputLabel id="edit-task-type-label" shrink>Task Type</InputLabel>
+                <Select
+                  labelId="edit-task-type-label"
+                  value={editType}
+                  label="Task Type"
+                  onChange={(e) => setEditType(e.target.value as any)}
+                  notched
+                >
+                  <MenuItem value="text">Written Protocol (Text)</MenuItem>
+                  <MenuItem value="audio">Audio Routine</MenuItem>
+                  <MenuItem value="video">Video Routine</MenuItem>
+                  <MenuItem value="image">Image Protocol</MenuItem>
+                  <MenuItem value="pdf">PDF Document</MenuItem>
+                </Select>
+              </FormControl>
+
+              {editType === 'text' ? (
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Protocol Text / Instructions"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  multiline
+                  rows={6}
+                  placeholder={placeholders.text.description}
+                />
+              ) : (
+                <>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Duration (e.g. 5 min, 10 min)"
+                    value={editDuration}
+                    onChange={(e) => setEditDuration(e.target.value)}
+                    placeholder="e.g. 5 min"
+                  />
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Description / Instruction (Optional)"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    multiline
+                    rows={2}
+                    placeholder={placeholders[editType]?.description}
+                  />
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Attached URL / File Link"
+                    value={editContentUrl}
+                    onChange={(e) => setEditContentUrl(e.target.value)}
+                    placeholder={placeholders[editType]?.url}
+                    disabled={editIsUploading}
+                  />
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="External Reference Video/Page (e.g. YouTube/Vimeo)"
+                    value={editResourceUrl}
+                    onChange={(e) => setEditResourceUrl(e.target.value)}
+                    placeholder="e.g. https://youtube.com/watch?v=..."
+                  />
+
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Button
+                      variant="outlined"
+                      component="label"
+                      startIcon={editIsUploading ? <CircularProgress size={16} /> : <Upload size={16} />}
+                      disabled={editIsUploading}
+                      sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}
+                    >
+                      {editIsUploading ? 'Uploading...' : `Upload New ${editType.toUpperCase()} File`}
+                      <input
+                        type="file"
+                        hidden
+                        onChange={handleEditFileChange}
+                        accept={
+                          editType === 'audio' ? 'audio/*' :
+                          editType === 'video' ? 'video/*' :
+                          editType === 'image' ? 'image/*' :
+                          editType === 'pdf' ? 'application/pdf' :
+                          '*/*'
+                        }
+                      />
+                    </Button>
+                    {editContentUrl && (
+                      <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 600 }}>
+                        ✓ File Attached
+                      </Typography>
+                    )}
+                  </Box>
+                </>
+              )}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3, borderTop: '1px solid rgba(255, 255, 255, 0.08)', pt: 2 }}>
+            <Button 
+              onClick={() => setIsEditDialogOpen(false)}
+              sx={{ color: '#B0B0B0' }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={editIsUploading || saveTaskMutation.isPending}
+              sx={{ backgroundColor: 'var(--emerald-mid)', color: 'var(--emerald-primary)', fontWeight: 700 }}
+            >
+              Save Changes
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
     </Box>
   );
 };

@@ -10,18 +10,20 @@ import {
   Divider,
   Badge,
   useTheme,
-  Button
+  Button,
+  useMediaQuery
 } from '@mui/material';
 import { 
   Bell, 
   Settings, 
   User, 
   LogOut,
-  ChevronDown
+  ChevronDown,
+  Menu as MenuIcon
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/store/useStore';
+import { useAuthStore, useUIStore } from '@/store/useStore';
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '@/lib/queries';
 
 const Topbar = () => {
@@ -29,6 +31,8 @@ const Topbar = () => {
   const pathname = location.pathname;
   const navigate = useNavigate();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { toggleSidebar } = useUIStore();
   const { user, signOut } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [notiAnchorEl, setNotiAnchorEl] = useState<null | HTMLElement>(null);
@@ -84,7 +88,7 @@ const Topbar = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        px: 4,
+        px: { xs: 2, md: 4 },
         backgroundColor: 'rgba(11, 11, 15, 0.8)',
         backdropFilter: 'blur(10px)',
         borderBottom: '1px solid rgba(212, 175, 55, 0.1)',
@@ -93,13 +97,20 @@ const Topbar = () => {
         zIndex: 10,
       }}
     >
-      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, color: '#EAEAEA', fontSize: '1.25rem' }}>
-          {getPageTitle()}
-        </Typography>
-        <Typography variant="caption" sx={{ color: '#D4AF37', fontWeight: 500, letterSpacing: 0.5 }}>
-          INNER RESET PROGRAM
-        </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        {isMobile && (
+          <IconButton onClick={toggleSidebar} sx={{ color: '#D4AF37', p: 0.5 }}>
+            <MenuIcon size={24} />
+          </IconButton>
+        )}
+        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#EAEAEA', fontSize: '1.25rem' }}>
+            {getPageTitle()}
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#D4AF37', fontWeight: 500, letterSpacing: 0.5 }}>
+            INNER RESET PROGRAM
+          </Typography>
+        </Box>
       </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

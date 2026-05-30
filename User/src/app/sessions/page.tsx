@@ -275,8 +275,8 @@ const Sessions = () => {
           {bookingStep === 1 ? (
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', backgroundColor: 'rgba(255, 255, 255, 0.02)' }}>
               {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => (
-                <Box key={day} sx={{ p: 1.5, textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#666' }}>{day}</Typography>
+                <Box key={day} sx={{ p: { xs: 0.5, sm: 1.5 }, textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#666', fontSize: { xs: '0.65rem', sm: '0.75rem' } }}>{day}</Typography>
                 </Box>
               ))}
               {[...Array(31)].map((_, i) => {
@@ -293,8 +293,8 @@ const Sessions = () => {
                       setBookingStep(2);
                     }}
                     sx={{ 
-                      minHeight: 100, 
-                      p: 1, 
+                      minHeight: { xs: 50, sm: 100 }, 
+                      p: { xs: 0.5, sm: 1 }, 
                       borderRight: '1px solid rgba(255, 255, 255, 0.05)', 
                       borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
                       backgroundColor: isSelected ? 'rgba(212, 175, 55, 0.1)' : (isBusy ? 'rgba(255, 255, 255, 0.02)' : 'transparent'),
@@ -303,16 +303,32 @@ const Sessions = () => {
                       '&:hover': { backgroundColor: isSelected ? 'rgba(212, 175, 55, 0.15)' : 'rgba(255, 255, 255, 0.05)' }
                     }}
                   >
-                    <Typography variant="body2" sx={{ color: isSelected ? '#D4AF37' : '#B0B0B0', fontWeight: isSelected || isBusy ? 800 : 400 }}>{day}</Typography>
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        color: isSelected ? '#D4AF37' : '#B0B0B0', 
+                        fontWeight: isSelected || isBusy ? 800 : 400,
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                      }}
+                    >
+                      {day}
+                    </Typography>
                     {isBusy && (
-                      <Stack spacing={0.5} sx={{ mt: 1 }}>
+                      <Stack spacing={0.5} sx={{ mt: 0.5, alignItems: 'center' }}>
                         {daySessions.map((s: any) => (
                           <Tooltip key={s.id} title={`${s.session_type}: ${s.title}`}>
-                            <Chip 
-                              label="BUSY" 
-                              size="small" 
-                              sx={{ height: 16, fontSize: '0.5rem', backgroundColor: 'rgba(244, 67, 54, 0.1)', color: '#f44336', fontWeight: 900, border: '1px solid rgba(244, 67, 54, 0.2)' }} 
-                            />
+                            <Box sx={{ width: '100%' }}>
+                              <Box sx={{ display: { xs: 'flex', sm: 'none' }, justifyContent: 'center', mt: 0.5 }}>
+                                <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#f44336' }} />
+                              </Box>
+                              <Box sx={{ display: { xs: 'none', sm: 'block' }, width: '100%' }}>
+                                <Chip 
+                                  label="BUSY" 
+                                  size="small" 
+                                  sx={{ height: 16, fontSize: '0.5rem', backgroundColor: 'rgba(244, 67, 54, 0.1)', color: '#f44336', fontWeight: 900, border: '1px solid rgba(244, 67, 54, 0.2)' }} 
+                                />
+                              </Box>
+                            </Box>
                           </Tooltip>
                         ))}
                       </Stack>

@@ -1485,9 +1485,20 @@ const ProgramBuilder = () => {
       {/* Content Area */}
       <Box sx={{ width: '100%' }}>
         {/* Program Selector */}
-        <Paper sx={{ p: 2, mb: 3, display: 'flex', alignItems: 'center', gap: 2, backgroundColor: 'var(--emerald-deep)', border: '1px solid var(--emerald-mid)' }}>
+        <Paper 
+          sx={{ 
+            p: 2, 
+            mb: 3, 
+            display: 'flex', 
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'flex-start', sm: 'center' }, 
+            gap: 2, 
+            backgroundColor: 'var(--emerald-deep)', 
+            border: '1px solid var(--emerald-mid)' 
+          }}
+        >
           <Typography variant="body2" sx={{ color: 'var(--emerald-primary)', fontWeight: 700 }}>ACTIVE PROGRAM:</Typography>
-          <FormControl size="small" sx={{ minWidth: 300 }}>
+          <FormControl size="small" sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { xs: '100%', sm: 300 } }}>
             <Select
               value={programId || 'new'}
               onChange={(e) => setProgramId(e.target.value === 'new' ? null : e.target.value)}
@@ -2069,7 +2080,7 @@ const ProgramBuilder = () => {
             sx: { 
               backgroundColor: '#121217', 
               border: '1px solid rgba(255, 77, 77, 0.2)', 
-              minWidth: 400 
+              minWidth: { xs: 280, sm: 400 } 
             }
           }
         }}
@@ -2165,12 +2176,34 @@ const CreatedProgramTab = () => {
   const { data: allPrograms, isLoading: isLoadingPrograms } = usePrograms();
   const { data: allUsers, isLoading: isLoadingUsers } = useUsers();
   const enrollUserMutation = useEnrollUser();
+  const deleteProgramMutation = useDeleteProgram();
   const [expandedProgramId, setExpandedProgramId] = useState<string | null>(null);
 
   // Assignment state
   const [assigningProgram, setAssigningProgram] = useState<any | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [assignSnackbar, setAssignSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+
+  const handleDeleteProgram = async (e: React.MouseEvent, program: any) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to permanently delete the program "${program.title}" and all its modules, lessons, and tasks?`)) {
+      try {
+        await deleteProgramMutation.mutateAsync(program.id);
+        setAssignSnackbar({
+          open: true,
+          message: `Program "${program.title}" has been deleted successfully!`,
+          severity: 'success'
+        });
+      } catch (err: any) {
+        console.error(err);
+        setAssignSnackbar({
+          open: true,
+          message: `Failed to delete program: ${err.message || err}`,
+          severity: 'error'
+        });
+      }
+    }
+  };
 
   const handleAssignClick = (e: React.MouseEvent, program: any) => {
     e.stopPropagation();
@@ -2272,6 +2305,26 @@ const CreatedProgramTab = () => {
                   </Stack>
                   <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }} onClick={e => e.stopPropagation()}>
                     <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={deleteProgramMutation.isPending ? <CircularProgress size={14} sx={{ color: '#f44336' }} /> : <Trash2 size={14} />}
+                      onClick={(e) => handleDeleteProgram(e, p)}
+                      disabled={deleteProgramMutation.isPending}
+                      sx={{
+                        borderColor: 'rgba(244, 67, 54, 0.4)',
+                        color: '#f44336',
+                        fontWeight: 700,
+                        fontSize: '0.75rem',
+                        textTransform: 'none',
+                        '&:hover': { 
+                          borderColor: '#f44336', 
+                          backgroundColor: 'rgba(244, 67, 54, 0.05)' 
+                        }
+                      }}
+                    >
+                      {deleteProgramMutation.isPending ? 'Deleting...' : 'Delete'}
+                    </Button>
+                    <Button
                       variant="contained"
                       size="small"
                       startIcon={<UserCheck size={16} />}
@@ -2322,7 +2375,7 @@ const CreatedProgramTab = () => {
         onClose={() => setAssigningProgram(null)}
         slotProps={{
           paper: {
-            sx: { backgroundColor: '#121217', border: '1px solid var(--emerald-mid)', minWidth: 400 }
+            sx: { backgroundColor: '#121217', border: '1px solid var(--emerald-mid)', minWidth: { xs: 280, sm: 400 } }
           }
         }}
       >

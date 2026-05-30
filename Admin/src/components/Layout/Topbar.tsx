@@ -11,20 +11,25 @@ import {
   ListItemIcon, 
   Divider,
   Badge,
-  useTheme
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import { 
   Bell, 
   Settings, 
   User, 
   LogOut,
-  ChevronDown
+  ChevronDown,
+  Menu as MenuIcon
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
+import { useUIStore } from '@/store/useStore';
 
 const Topbar = () => {
   const { pathname } = useLocation();
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { toggleSidebar } = useUIStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -49,7 +54,7 @@ const Topbar = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        px: 4,
+        px: { xs: 2, md: 4 },
         backgroundColor: 'rgba(11, 11, 15, 0.8)',
         backdropFilter: 'blur(10px)',
         borderBottom: '1px solid rgba(212, 175, 55, 0.1)',
@@ -58,13 +63,20 @@ const Topbar = () => {
         zIndex: 10,
       }}
     >
-      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, color: '#EAEAEA', fontSize: '1.25rem' }}>
-          {getPageTitle()}
-        </Typography>
-        <Typography variant="caption" sx={{ color: '#D4AF37', fontWeight: 500, letterSpacing: 0.5 }}>
-          MAGNIFIED ADMIN SYSTEM
-        </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        {isMobile && (
+          <IconButton onClick={toggleSidebar} sx={{ color: '#D4AF37', p: 0.5 }}>
+            <MenuIcon size={24} />
+          </IconButton>
+        )}
+        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#EAEAEA', fontSize: '1.25rem' }}>
+            {getPageTitle()}
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#D4AF37', fontWeight: 500, letterSpacing: 0.5 }}>
+            MAGNIFIED ADMIN SYSTEM
+          </Typography>
+        </Box>
       </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
