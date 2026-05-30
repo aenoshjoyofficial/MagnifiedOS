@@ -145,6 +145,15 @@ const TodayPractice = () => {
     });
   };
 
+  const parsedRoutine = React.useMemo(() => {
+    const dayLessons = allLessons.filter((l: any) => l.day_number === viewedDay);
+    for (const l of dayLessons) {
+      const routine = parseRoutineFromHtml(l.description || '');
+      if (routine && routine.length > 0) return routine;
+    }
+    return null;
+  }, [allLessons, viewedDay]);
+
   if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -161,15 +170,6 @@ const TodayPractice = () => {
       </Box>
     );
   }
-
-  const parsedRoutine = React.useMemo(() => {
-    const dayLessons = allLessons.filter((l: any) => l.day_number === viewedDay);
-    for (const l of dayLessons) {
-      const routine = parseRoutineFromHtml(l.description || '');
-      if (routine && routine.length > 0) return routine;
-    }
-    return null;
-  }, [allLessons, viewedDay]);
   
   const getTasksForWindow = (windowName: string) => {
     return tasks.filter((t: any) => {
