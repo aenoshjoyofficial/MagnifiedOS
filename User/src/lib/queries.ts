@@ -159,13 +159,25 @@ export const useSessions = () => {
   return useQuery({
     queryKey: ['sessions'],
     queryFn: async () => {
+      // Try querying with is_published filter first
       const { data, error } = await supabase
         .from('sessions')
         .select('*')
         .eq('is_published', true)
         .order('start_time', { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        // If the query failed (e.g. because is_published column doesn't exist yet),
+        // fallback to retrieving all sessions without that filter
+        console.warn('Failed to query sessions with is_published, trying fallback without filter:', error.message);
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('sessions')
+          .select('*')
+          .order('start_time', { ascending: true });
+        
+        if (fallbackError) throw fallbackError;
+        return fallbackData;
+      }
       return data;
     },
   });
