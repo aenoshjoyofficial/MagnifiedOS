@@ -891,12 +891,12 @@ const ProgramBuilder = () => {
         id: programId || undefined
       };
 
-      // Wrap with 5 second timeout to prevent infinite hanging
+      // Wrap with 30 second timeout to prevent infinite hanging
       const savePromise = saveProgramMutation.mutateAsync(payload);
       const saved = await Promise.race([
         savePromise,
         new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Save request timed out. Please check your Supabase connection and try again.')), 5000)
+          setTimeout(() => reject(new Error('Save request timed out. Please check your Supabase connection and try again.')), 30000)
         )
       ]);
 
