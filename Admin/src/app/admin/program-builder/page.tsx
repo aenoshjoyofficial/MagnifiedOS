@@ -30,6 +30,7 @@ import {
   ListItemText
 } from '@mui/material';
 import RichTextEditor from '@/components/RichTextEditor';
+import { supabase } from '@/lib/supabase';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -194,6 +195,20 @@ const ProgramBuilder = () => {
         });
       });
 
+      // Check if any of these tasks are completed
+      const taskIds = tasksToDelete.map(t => t.id);
+      if (taskIds.length > 0) {
+        const { data: completions } = await supabase
+          .from('task_completions')
+          .select('task_id')
+          .in('task_id', taskIds);
+        
+        if (completions && completions.length > 0) {
+          alert('Some tasks for this day have already been completed by a user. Deletion is disabled.');
+          return;
+        }
+      }
+
       console.log(`[DEBUG] Deleting all allotted tasks for Day ${dayNum}. Tasks to delete count: ${tasksToDelete.length}`);
 
       for (const t of tasksToDelete) {
@@ -220,33 +235,78 @@ const ProgramBuilder = () => {
 
       setLocalModules(updatedModules);
 
-      // Recompile routine HTML (will be empty)
-      const html = generateRoutineHtml([]);
-
-      // Save description to all chamber lessons of that day
+      // Recompile routine HTML for each lesson on this day
       for (const m of updatedModules) {
         const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
         if (lesson) {
-          const { tasks, ...payload } = lesson;
-          await saveLessonMutation.mutateAsync({
-            ...payload,
-            description: html
-          });
+          await syncLessonRoutine(lesson.id, updatedModules);
         }
       }
-
-      // Update local state descriptions
-      setLocalModules(prev => prev.map(m => ({
-        ...m,
-        lessons: m.lessons?.map((l: any) => 
-          l.day_number === dayNum ? { ...l, description: html } : l
-        ) || []
-      })));
 
       setNotification({ open: true, message: `All allotted tasks for Day ${dayNum} have been deleted.`, severity: 'success' });
     } catch (err: any) {
       console.error(err);
       setNotification({ open: true, message: `Failed to delete lesson tasks: ${err.message || err}`, severity: 'error' });
+    }
+  };
+
+  const handleDeleteDay = async (dayNum: number) => {
+    if (!window.confirm(`Are you sure you want to delete all tasks and the entire Day ${dayNum} allotment?`)) return;
+    try {
+      // 1. Find all lessons for this day in any modules
+      const lessonsToDelete: any[] = [];
+      localModules.forEach(m => {
+        const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+        if (lesson) {
+          lessonsToDelete.push({ id: lesson.id, moduleId: m.id });
+        }
+      });
+
+      // 2. Find tasks in these lessons and check if any are completed
+      const tasksToDelete: any[] = [];
+      lessonsToDelete.forEach(item => {
+        const module = localModules.find(m => m.id === item.moduleId);
+        const lesson = module?.lessons?.find((l: any) => l.id === item.id);
+        lesson?.tasks?.forEach((t: any) => {
+          tasksToDelete.push(t.id);
+        });
+      });
+
+      if (tasksToDelete.length > 0) {
+        const { data: completions } = await supabase
+          .from('task_completions')
+          .select('task_id')
+          .in('task_id', tasksToDelete);
+        
+        if (completions && completions.length > 0) {
+          alert(`Some tasks on Day ${dayNum} are already completed by a user. Cannot delete this day.`);
+          return;
+        }
+
+        // Delete all tasks on this day first (cascade safety)
+        for (const taskId of tasksToDelete) {
+          await deleteTaskMutation.mutateAsync(taskId);
+        }
+      }
+
+      // 3. Delete lessons from DB
+      for (const item of lessonsToDelete) {
+        await deleteLessonMutation.mutateAsync(item.id);
+      }
+
+      // 4. Update local state
+      setLocalModules(prev => prev.map(m => ({
+        ...m,
+        lessons: m.lessons?.filter((l: any) => l.day_number !== dayNum) || []
+      })));
+
+      // 5. Remove from dayIndices array
+      setDayIndices(prev => prev.filter(d => d !== dayNum));
+
+      setNotification({ open: true, message: `Day ${dayNum} allotment deleted successfully!`, severity: 'success' });
+    } catch (err) {
+      console.error('Failed to delete day:', err);
+      setNotification({ open: true, message: 'Failed to delete day allotment.', severity: 'error' });
     }
   };
 
@@ -263,6 +323,20 @@ const ProgramBuilder = () => {
           }
         });
       });
+
+      // Check if any of these tasks are completed
+      const taskIds = tasksToDelete.map(t => t.id);
+      if (taskIds.length > 0) {
+        const { data: completions } = await supabase
+          .from('task_completions')
+          .select('task_id')
+          .in('task_id', taskIds);
+        
+        if (completions && completions.length > 0) {
+          alert('Some tasks in this window have already been completed by a user. Clearing is disabled.');
+          return;
+        }
+      }
 
       console.log(`[DEBUG] Clearing window ${windowName} for Day ${dayNum}. Tasks to delete count: ${tasksToDelete.length}`);
 
@@ -290,59 +364,13 @@ const ProgramBuilder = () => {
 
       setLocalModules(updatedModules);
 
-      // Recompile routine HTML
-      const allDayTasks: any[] = [];
-      updatedModules.forEach(m => {
-        const chamberKey = matchChamberKey(m.title);
-        if (!chamberKey) return;
-        const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
-        lesson?.tasks?.forEach((t: any) => {
-          allDayTasks.push({ ...t, chamberKey, chamberName: m.title });
-        });
-      });
-
-      const routineWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
-      const routineData = routineWindows.map(win => {
-        const tasks = allDayTasks.filter(t => t.content?.routine_window === win);
-        if (tasks.length === 0) return null;
-
-        const anchor = tasks.map(t => t.title).join(' · ');
-        const instruction = tasks.map(t => `<p>${t.description || t.content?.text || ''}</p>`).join('');
-
-        const systemName = win === 'Morning' ? 'Mental Clarity' : 
-                           win === 'Mid-Morning' ? 'The Frequency Field' :
-                           win === 'Midday' ? 'The Plate' :
-                           win === 'Afternoon' ? 'Breath Atelier' :
-                           win === 'Evening' ? 'The Signature' : 'Sleep Cocoon';
-
-        return {
-          window: win,
-          system: systemName,
-          anchor,
-          instruction
-        };
-      }).filter(Boolean);
-
-      const html = generateRoutineHtml(routineData as any);
-
-      // Save description to all chamber lessons of that day
+      // Recompile routine HTML for each lesson on this day
       for (const m of updatedModules) {
         const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
         if (lesson) {
-          const { tasks, ...payload } = lesson;
-          await saveLessonMutation.mutateAsync({
-            ...payload,
-            description: html
-          });
+          await syncLessonRoutine(lesson.id, updatedModules);
         }
       }
-
-      setLocalModules(prev => prev.map(m => ({
-        ...m,
-        lessons: m.lessons?.map((l: any) => 
-          l.day_number === dayNum ? { ...l, description: html } : l
-        ) || []
-      })));
 
       setNotification({ open: true, message: `Cleared all tasks in ${windowName} for Day ${dayNum}.`, severity: 'success' });
     } catch (err: any) {
@@ -365,7 +393,10 @@ const ProgramBuilder = () => {
         l.tasks?.forEach((t: any) => {
           const isLegacy = t.title.includes('Chamber Task') || !!t.title.match(/Chamber Task/i);
           
-          if (isBrokenChamber || isInvalidLesson || isLegacy) {
+          // We only automatically delete legacy placeholder tasks in the background.
+          // We NEVER delete tasks due to temporary chamber or day number mismatches
+          // (which can be caused by client-side cache stale state), preventing data loss.
+          if (isLegacy) {
             tasksToDelete.push(t.id);
           }
         });
@@ -471,6 +502,17 @@ const ProgramBuilder = () => {
 
   const handleUpdateTaskWindow = async (task: any, newWindow: string, dayNum: number) => {
     try {
+      // Check if this task is completed
+      const { data: completions } = await supabase
+        .from('task_completions')
+        .select('task_id')
+        .eq('task_id', task.id);
+      
+      if (completions && completions.length > 0) {
+        alert('This task has already been completed by a user. Moving or re-allotting is disabled.');
+        return;
+      }
+
       const isUnassigning = newWindow === 'Unassigned';
       let targetLessonId = task.lesson_id;
 
@@ -537,60 +579,20 @@ const ProgramBuilder = () => {
       });
       setLocalModules(updatedModules);
 
-      // 3. Compile daily routine HTML
-      const allDayTasks: any[] = [];
-      updatedModules.forEach(m => {
-        const chamberKey = matchChamberKey(m.title);
-        if (!chamberKey) return;
-        const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
-        lesson?.tasks?.forEach((t: any) => {
-          allDayTasks.push({ ...t, chamberKey, chamberName: m.title });
-        });
-      });
-
-      const routineWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
-      const routineData = routineWindows.map(windowName => {
-        const tasks = allDayTasks.filter(t => t.content?.routine_window === windowName);
-        if (tasks.length === 0) return null;
-
-        const anchor = tasks.map(t => t.title).join(' · ');
-        const instruction = tasks.map(t => `<p>${t.description || t.content?.text || ''}</p>`).join('');
-
-        const systemName = windowName === 'Morning' ? 'Mental Clarity' : 
-                           windowName === 'Mid-Morning' ? 'The Frequency Field' :
-                           windowName === 'Midday' ? 'The Plate' :
-                           windowName === 'Afternoon' ? 'Breath Atelier' :
-                           windowName === 'Evening' ? 'The Signature' : 'Sleep Cocoon';
-
-        return {
-          window: windowName,
-          system: systemName,
-          anchor,
-          instruction
-        };
-      }).filter(Boolean);
-
-      const html = generateRoutineHtml(routineData as any);
-
-      // 4. Save the compiled description back to all chamber lessons of that day
-      for (const m of updatedModules) {
-        const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
-        if (lesson) {
-          const { tasks, ...payload } = lesson;
-          await saveLessonMutation.mutateAsync({
-            ...payload,
-            description: html
-          });
+      // 3. Recompile routines for affected lessons
+      if (isUnassigning) {
+        const sourceLesson = updatedModules.flatMap(m => m.lessons || []).find(l => l.day_number === dayNum && l.module_id === task.module_id);
+        if (sourceLesson) {
+          await syncLessonRoutine(sourceLesson.id, updatedModules);
+        }
+        if (targetLessonId) {
+          await syncLessonRoutine(targetLessonId, updatedModules);
+        }
+      } else {
+        if (task.lesson_id) {
+          await syncLessonRoutine(task.lesson_id, updatedModules);
         }
       }
-
-      // Update the local state descriptions too
-      setLocalModules(prev => prev.map(m => ({
-        ...m,
-        lessons: m.lessons?.map((l: any) => 
-          l.day_number === dayNum ? { ...l, description: html } : l
-        )
-      })));
 
       setNotification({ open: true, message: 'Task allotment updated and routines synchronized!', severity: 'success' });
     } catch (err) {
@@ -601,6 +603,17 @@ const ProgramBuilder = () => {
 
   const handleAllotTask = async (taskId: string, targetModuleId: string, targetDayNum: number, routineWindow: string) => {
     try {
+      // Check if this task is completed
+      const { data: completions } = await supabase
+        .from('task_completions')
+        .select('task_id')
+        .eq('task_id', taskId);
+      
+      if (completions && completions.length > 0) {
+        alert('This task has already been completed by a user. Moving is disabled.');
+        return;
+      }
+
       const module = localModules.find(m => m.id === targetModuleId);
       if (!module) return;
 
@@ -668,59 +681,8 @@ const ProgramBuilder = () => {
 
       setLocalModules(updatedModules);
 
-      // Recompile the daily routine HTML
-      const allDayTasks: any[] = [];
-      updatedModules.forEach(m => {
-        const chamberKey = matchChamberKey(m.title);
-        if (!chamberKey) return;
-        const lesson = m.lessons?.find((l: any) => l.day_number === targetDayNum);
-        lesson?.tasks?.forEach((t: any) => {
-          allDayTasks.push({ ...t, chamberKey, chamberName: m.title });
-        });
-      });
-
-      const routineWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
-      const routineData = routineWindows.map(windowName => {
-        const tasks = allDayTasks.filter(t => t.content?.routine_window === windowName);
-        if (tasks.length === 0) return null;
-
-        const anchor = tasks.map(t => t.title).join(' · ');
-        const instruction = tasks.map(t => `<p>${t.description || t.content?.text || ''}</p>`).join('');
-
-        const systemName = windowName === 'Morning' ? 'Mental Clarity' : 
-                           windowName === 'Mid-Morning' ? 'The Frequency Field' :
-                           windowName === 'Midday' ? 'The Plate' :
-                           windowName === 'Afternoon' ? 'Breath Atelier' :
-                           windowName === 'Evening' ? 'The Signature' : 'Sleep Cocoon';
-
-        return {
-          window: windowName,
-          system: systemName,
-          anchor,
-          instruction
-        };
-      }).filter(Boolean);
-
-      const html = generateRoutineHtml(routineData as any);
-
-      // Save description to all chamber lessons of that day
-      for (const m of updatedModules) {
-        const lesson = m.lessons?.find((l: any) => l.day_number === targetDayNum);
-        if (lesson) {
-          const { tasks, ...payload } = lesson;
-          await saveLessonMutation.mutateAsync({
-            ...payload,
-            description: html
-          });
-        }
-      }
-
-      setLocalModules(prev => prev.map(m => ({
-        ...m,
-        lessons: m.lessons?.map((l: any) => 
-          l.day_number === targetDayNum ? { ...l, description: html } : l
-        )
-      })));
+      // Recompile routine for this lesson
+      await syncLessonRoutine(dayLesson.id, updatedModules);
 
       setNotification({ open: true, message: 'Task allotted successfully!', severity: 'success' });
     } catch (err: any) {
@@ -733,10 +695,12 @@ const ProgramBuilder = () => {
     const modulesSource = updatedModulesList || localModules;
     // 1. Find the lesson and its tasks
     let lesson: any = null;
+    let parentModule: any = null;
     modulesSource.forEach(m => {
       const found = m.lessons?.find((l: any) => l.id === lessonId);
       if (found) {
         lesson = found;
+        parentModule = m;
       }
     });
 
@@ -752,11 +716,7 @@ const ProgramBuilder = () => {
       const instruction = tasks.map((t: any) => `<p>${t.description || t.content?.text || ''}</p>`).join('');
 
       // Determine system name
-      const systemName = windowName === 'Morning' ? 'Mental Clarity' : 
-                         windowName === 'Mid-Morning' ? 'The Frequency Field' :
-                         windowName === 'Midday' ? 'The Plate' :
-                         windowName === 'Afternoon' ? 'Breath Atelier' :
-                         windowName === 'Evening' ? 'The Signature' : 'Sleep Cocoon';
+      const systemName = parentModule?.title || 'Daily Integration';
 
       return {
         window: windowName,
@@ -1114,56 +1074,50 @@ const ProgramBuilder = () => {
       const duration = programData.duration_days || 30;
       const updatedModules = JSON.parse(JSON.stringify(localModules));
 
-      for (let dayNum = 1; dayNum <= duration; dayNum++) {
-        // Compile daily routine HTML for this day
-        const allDayTasks: any[] = [];
-        updatedModules.forEach((m: any) => {
-          const chamberKey = matchChamberKey(m.title);
-          if (!chamberKey) return;
-          const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
-          lesson?.tasks?.forEach((t: any) => {
-            allDayTasks.push({ ...t, chamberKey, chamberName: m.title });
-          });
+      let totalLessons = 0;
+      updatedModules.forEach((m: any) => {
+        m.lessons?.forEach((l: any) => {
+          if (l.day_number > 0) totalLessons++;
         });
+      });
 
-        const routineWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
-        const routineData = routineWindows.map(windowName => {
-          const tasks = allDayTasks.filter(t => t.content?.routine_window === windowName);
-          if (tasks.length === 0) return null;
+      let processed = 0;
+      for (const m of updatedModules) {
+        if (!m.lessons) continue;
+        for (const lesson of m.lessons) {
+          if (lesson.day_number <= 0) continue;
 
-          const anchor = tasks.map(t => t.title).join(' · ');
-          const instruction = tasks.map(t => `<p>${t.description || t.content?.text || ''}</p>`).join('');
+          // Compile routine for this single lesson
+          const routineWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
+          const routineData = routineWindows.map(windowName => {
+            const tasks = lesson.tasks?.filter((t: any) => t.content?.routine_window === windowName) || [];
+            if (tasks.length === 0) return null;
 
-          const systemName = windowName === 'Morning' ? 'Mental Clarity' : 
-                             windowName === 'Mid-Morning' ? 'The Frequency Field' :
-                             windowName === 'Midday' ? 'The Plate' :
-                             windowName === 'Afternoon' ? 'Breath Atelier' :
-                             windowName === 'Evening' ? 'The Signature' : 'Sleep Cocoon';
+            const anchor = tasks.map((t: any) => t.title).join(' · ');
+            const instruction = tasks.map((t: any) => `<p>${t.description || t.content?.text || ''}</p>`).join('');
 
-          return {
-            window: windowName,
-            system: systemName,
-            anchor,
-            instruction
-          };
-        }).filter(Boolean);
+            const systemName = m.title || 'Daily Integration';
 
-        const html = generateRoutineHtml(routineData as any);
+            return {
+              window: windowName,
+              system: systemName,
+              anchor,
+              instruction
+            };
+          }).filter(Boolean);
 
-        // Save description to all chamber lessons of that day
-        for (const m of updatedModules) {
-          const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
-          if (lesson) {
-            const { tasks, ...payload } = lesson;
-            await saveLessonMutation.mutateAsync({
-              ...payload,
-              description: html
-            });
-            lesson.description = html;
-          }
+          const html = generateRoutineHtml(routineData as any);
+
+          const { tasks, ...payload } = lesson;
+          await saveLessonMutation.mutateAsync({
+            ...payload,
+            description: html
+          });
+          lesson.description = html;
+
+          processed++;
+          setSyncProgress(Math.round((processed / totalLessons) * 100));
         }
-
-        setSyncProgress(Math.round((dayNum / duration) * 100));
       }
 
       setLocalModules(updatedModules);
@@ -1661,7 +1615,10 @@ const ProgramBuilder = () => {
                   style={{ display: 'none' }}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) handleCoverImageUpload(file);
+                    if (file) {
+                      handleCoverImageUpload(file);
+                      e.target.value = '';
+                    }
                   }}
                 />
                 <label htmlFor="cover-upload" style={{ width: '100%' }}>
@@ -1829,27 +1786,48 @@ const ProgramBuilder = () => {
                               Rename the title above. Allot tasks configured in the Chambers for this day.
                             </Typography>
                           </Box>
-                          {dayTasks.length > 0 && (
+                          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                            {dayTasks.length > 0 && (
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => openDeleteAllDialog(dayNum)}
+                                sx={{
+                                  color: '#B0B0B0',
+                                  borderColor: 'rgba(255, 255, 255, 0.15)',
+                                  fontWeight: 700,
+                                  textTransform: 'none',
+                                  whiteSpace: 'nowrap',
+                                  '&:hover': {
+                                    borderColor: '#ff4d4d',
+                                    backgroundColor: 'rgba(255, 77, 77, 0.05)',
+                                    color: '#ff4d4d'
+                                  }
+                                }}
+                              >
+                                Clear All Tasks
+                              </Button>
+                            )}
                             <Button
                               variant="outlined"
                               size="small"
-                              onClick={() => openDeleteAllDialog(dayNum)}
+                              onClick={() => handleDeleteDay(dayNum)}
                               sx={{
                                 color: '#ff4d4d',
-                                borderColor: 'rgba(212, 175, 55, 0.3)',
+                                borderColor: 'rgba(255, 77, 77, 0.3)',
                                 fontWeight: 700,
                                 textTransform: 'none',
                                 whiteSpace: 'nowrap',
                                 '&:hover': {
-                                  borderColor: '#D4AF37',
+                                  borderColor: '#ff4d4d',
                                   backgroundColor: 'rgba(255, 77, 77, 0.05)',
                                   color: '#f44336'
                                 }
                               }}
                             >
-                              Delete All Lesson Tasks
+                              Delete Day Block
                             </Button>
-                          )}
+                          </Box>
                         </Box>
 
                         {/* Task Allotment Form for this Day */}
@@ -1927,7 +1905,16 @@ const ProgramBuilder = () => {
                               tempSelectedWindow[dayNum] || 'Morning'
                             )}
                             disabled={!tempSelectedTask[dayNum]}
-                            sx={{ backgroundColor: 'var(--emerald-primary)', color: '#0B0B0F', fontWeight: 700, ml: 'auto' }}
+                            sx={{ 
+                              backgroundColor: 'var(--emerald-primary)', 
+                              color: '#0B0B0F', 
+                              fontWeight: 700, 
+                              ml: 'auto',
+                              '&.Mui-disabled': {
+                                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                color: 'rgba(255, 255, 255, 0.25)'
+                              }
+                            }}
                           >
                             Allot Task
                           </Button>

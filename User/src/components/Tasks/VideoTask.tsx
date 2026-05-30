@@ -16,14 +16,25 @@ interface VideoTaskProps {
 const VideoTask = ({ url, onComplete }: VideoTaskProps) => {
   const [isCompleted, setIsCompleted] = useState(false);
 
-  // Simple YouTube ID extraction
+  // Robust YouTube and Vimeo ID extraction
   const getEmbedUrl = (url: string) => {
-    if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      const id = url.split('v=')[1] || url.split('/').pop();
-      return `https://www.youtube.com/embed/${id}`;
+    if (!url) return '';
+    
+    // YouTube
+    const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/ ]{11})/i);
+    if (ytMatch && ytMatch[1]) {
+      return `https://www.youtube.com/embed/${ytMatch[1]}`;
     }
+    
+    // Vimeo
+    const vimeoMatch = url.match(/(?:vimeo\.com\/)(?:channels\/[^\/]+\/|groups\/[^\/]+\/|album\/[^\/]+\/video\/|showcase\/[^\/]+\/video\/|video\/|manage\/videos\/)?([0-9]+)/i);
+    if (vimeoMatch && vimeoMatch[1]) {
+      return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+    }
+    
     return url;
   };
+
 
   return (
     <Box>

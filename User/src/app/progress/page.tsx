@@ -32,12 +32,7 @@ const Progress = () => {
         setTargetUserId(user.id);
         return;
       }
-      const { data } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', 'aenoshjoy@gmail.com')
-        .single();
-      if (data) setTargetUserId(data.id);
+      // No hardcoded email fallback - unauthenticated users are handled by AuthGuard
     };
     findUserId();
   }, [user]);

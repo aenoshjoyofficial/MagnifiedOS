@@ -422,6 +422,9 @@ const UserManagement = () => {
                     return prog ? prog.title : 'Selected';
                   }}
                 >
+                  <MenuItem value="" style={{ display: 'none' }}>
+                    Select a program...
+                  </MenuItem>
                   {isLoadingPrograms ? (
                     <MenuItem disabled><CircularProgress size={20} sx={{ mr: 2 }} /> Loading...</MenuItem>
                   ) : (

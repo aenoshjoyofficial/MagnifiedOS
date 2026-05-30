@@ -172,6 +172,11 @@ export const useSaveProgram = () => {
   return useMutation({
     mutationFn: async (program: Partial<Program>) => {
       console.log("START SAVE");
+      try {
+        await supabase.auth.getSession();
+      } catch (authErr) {
+        console.error("Error refreshing session before save program:", authErr);
+      }
       console.log("BEFORE INSERT");
       const { data, error } = await supabase
         .from('programs')
@@ -232,6 +237,13 @@ export const useEnrollUser = () => {
   
   return useMutation({
     mutationFn: async ({ userId, programId }: { userId: string, programId: string }) => {
+      // Deactivate any existing active enrollments
+      await supabase
+        .from('enrollments')
+        .update({ status: 'inactive' })
+        .eq('user_id', userId)
+        .eq('status', 'active');
+
       const { data, error } = await supabase
         .from('enrollments')
         .insert({
@@ -415,16 +427,25 @@ export const useSaveTask = () => {
   
   return useMutation({
     mutationFn: async (task: Partial<Task>) => {
+      try {
+        await supabase.auth.getSession();
+      } catch (authErr) {
+        console.error("Error refreshing session before save task:", authErr);
+      }
+      const cleanTask = { ...task };
+      delete (cleanTask as any).chamberName;
+      delete (cleanTask as any).lessonId;
+
       let query;
-      if (task.id) {
+      if (cleanTask.id) {
         query = supabase
           .from('tasks')
-          .update(task)
-          .eq('id', task.id);
+          .update(cleanTask)
+          .eq('id', cleanTask.id);
       } else {
         query = supabase
           .from('tasks')
-          .upsert(task);
+          .upsert(cleanTask);
       }
       const { data, error } = await query.select().single();
       
@@ -518,6 +539,13 @@ export const useDashboardStats = () => {
 export const useUploadAsset = () => {
   return useMutation({
     mutationFn: async ({ file, bucket, path }: { file: File, bucket: string, path: string }) => {
+      // Warm up the session and ensure the token is refreshed/valid before uploading
+      try {
+        await supabase.auth.getSession();
+      } catch (authErr) {
+        console.error("Error refreshing session before upload:", authErr);
+      }
+
       const { data, error } = await supabase.storage
         .from(bucket)
         .upload(path, file, {

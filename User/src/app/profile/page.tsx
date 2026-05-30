@@ -88,12 +88,7 @@ const Profile = () => {
         setTargetUserId(user.id);
         return;
       }
-      const { data } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', 'aenoshjoy@gmail.com')
-        .single();
-      if (data) setTargetUserId(data.id);
+      // No hardcoded email fallback - unauthenticated users are handled by AuthGuard
     };
     findUserId();
   }, [user]);
@@ -118,6 +113,18 @@ const Profile = () => {
   const handleSave = async () => {
     if (!targetUserId) return;
     try {
+      // If email changed, also update the auth login email
+      if (formData.email && formData.email !== profile?.email) {
+        const { error: authError } = await supabase.auth.updateUser({
+          email: formData.email
+        });
+        if (authError) {
+          console.error('Auth email update error:', authError);
+          alert(`Could not update login email: ${authError.message}\nYour display name was still saved.`);
+          // Continue to save profile even if auth email fails
+        }
+      }
+
       await updateProfileMutation.mutateAsync({
         userId: targetUserId,
         updates: {
@@ -130,6 +137,7 @@ const Profile = () => {
       console.error(err);
     }
   };
+
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

@@ -17,17 +17,21 @@ interface AuthState {
   user: any | null;
   profile: any | null;
   loading: boolean;
+  initialized: boolean;
   initialize: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ data: any; error: any }>;
   signOut: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   profile: null,
   loading: true,
+  initialized: false,
 
   initialize: async () => {
+    if (get().initialized) return;
+    set({ initialized: true });
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {

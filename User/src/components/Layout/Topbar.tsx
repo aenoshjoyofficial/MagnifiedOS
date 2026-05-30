@@ -55,14 +55,15 @@ const Topbar = () => {
 
   React.useEffect(() => {
     const fetchProfile = async () => {
-      const email = user?.email || 'aenoshjoy@gmail.com';
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('email', email)
-        .single();
-      
-      if (data) setProfile(data);
+      if (user?.id) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (data) setProfile(data);
+      }
     };
     fetchProfile();
   }, [user]);

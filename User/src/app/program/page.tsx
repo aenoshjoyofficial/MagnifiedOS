@@ -32,12 +32,7 @@ const MyProgram = () => {
         setTargetUserId(user.id);
         return;
       }
-      const { data } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', 'aenoshjoy@gmail.com')
-        .single();
-      if (data) setTargetUserId(data.id);
+      // No hardcoded email fallback - unauthenticated users are handled by AuthGuard
     };
     findUserId();
   }, [user]);
@@ -74,6 +69,24 @@ const MyProgram = () => {
     return keys;
   }, [completions, taskMap]);
 
+  // A lesson (Day D) is locked if any previous lesson (Day < D) has uncompleted tasks
+  const isLessonLocked = React.useCallback((lesson: any) => {
+    const dayNum = lesson.day_number;
+    if (dayNum <= 1) return false;
+    
+    // Find all lessons for days before this one
+    const prevLessons = program?.modules?.flatMap((m: any) => m.lessons || [])
+      .filter((l: any) => l.day_number < dayNum) || [];
+      
+    // Check if any task in those previous lessons is not completed
+    return prevLessons.some((l: any) => {
+      const tasks = l.tasks || [];
+      if (tasks.length === 0) return false;
+      const completed = tasks.filter((t: any) => completedKeys.has(`${l.day_number}_${t.title}`));
+      return completed.length < tasks.length;
+    });
+  }, [program, completedKeys]);
+
   if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -93,11 +106,18 @@ const MyProgram = () => {
 
   // Logic to determine status for modules and days
   const getModuleStatus = (module: any) => {
-    const allTasks = module.lessons?.flatMap((l: any) => l.tasks || []) || [];
+    const lessons = module.lessons || [];
+    if (lessons.length === 0) return 'locked';
+    
+    // If all lessons in this module are locked, then the module is locked
+    const allLessonsLocked = lessons.every((l: any) => isLessonLocked(l));
+    if (allLessonsLocked) return 'locked';
+    
+    const allTasks = lessons.flatMap((l: any) => l.tasks || []);
     if (allTasks.length === 0) return 'locked';
     
     const completedTasks = allTasks.filter((t: any) => {
-      const lesson = module.lessons.find((l: any) => l.tasks?.some((tk: any) => tk.id === t.id));
+      const lesson = lessons.find((l: any) => l.tasks?.some((tk: any) => tk.id === t.id));
       return completedKeys.has(`${lesson?.day_number || 1}_${t.title}`);
     });
     
@@ -163,7 +183,7 @@ const MyProgram = () => {
                 <Stack>
                   {module.lessons.map((lesson: any) => {
                     const dayStatus = getDayStatus(lesson);
-                    const isLocked = status === 'locked';
+                    const isLocked = status === 'locked' || isLessonLocked(lesson);
                     
                     return (
                       <Box 

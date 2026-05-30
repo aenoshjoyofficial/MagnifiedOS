@@ -285,7 +285,10 @@ const SessionManager = () => {
                   style={{ display: 'none' }}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) handleAvatarUpload(file);
+                    if (file) {
+                      handleAvatarUpload(file);
+                      e.target.value = '';
+                    }
                   }}
                 />
                 <label htmlFor="host-avatar-upload">

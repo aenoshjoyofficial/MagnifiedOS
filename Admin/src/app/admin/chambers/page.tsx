@@ -38,7 +38,8 @@ import {
   Wind,
   Award,
   Upload,
-  Edit
+  Edit,
+  Unlock
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { 
@@ -149,11 +150,17 @@ const ChamberPage = () => {
       });
 
       setContentUrl(publicUrl);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Upload failed:', err);
-      alert('Upload failed. Ensure bucket "program-assets" exists.');
+      const errMsg = err?.message || err?.error_description || String(err);
+      if (errMsg.includes('exceeded the maximum allowed size') || errMsg.includes('exceed')) {
+        alert(`Upload failed: The file size (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the maximum allowed size of your Supabase storage bucket "program-assets".\n\nTo resolve this:\n1. Open your Supabase Dashboard.\n2. Navigate to Storage > Buckets > "program-assets".\n3. Click "Edit Bucket" (or the triple-dot menu next to the bucket name).\n4. Under "Maximum File Size", change the limit to a higher value (e.g., 50MB or 100MB).\n5. Save the configuration and retry the upload.`);
+      } else {
+        alert(`Upload failed: ${errMsg}`);
+      }
     } finally {
       setIsUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -197,6 +204,33 @@ const ChamberPage = () => {
     });
   }, [matchedModule]);
 
+  const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const fetchCompletions = async () => {
+      if (!allChamberTasks || allChamberTasks.length === 0) {
+        setCompletedTaskIds(new Set());
+        return;
+      }
+      const taskIds = allChamberTasks.map((t: any) => t.id);
+      
+      const { data, error } = await supabase
+        .from('task_completions')
+        .select('task_id')
+        .in('task_id', taskIds);
+        
+      if (error) {
+        console.error('Error fetching completions:', error);
+        return;
+      }
+      
+      const completedSet = new Set<string>(data.map((c: any) => c.task_id));
+      setCompletedTaskIds(completedSet);
+    };
+    
+    fetchCompletions();
+  }, [allChamberTasks]);
+
   // Debugging logs to inspect fetch parameters and returned database records
   console.log(`[DEBUG] selectedProgramId:`, selectedProgramId);
   console.log(`[DEBUG] chamberId:`, chamberId);
@@ -204,6 +238,7 @@ const ChamberPage = () => {
   console.log(`[DEBUG] matchedLesson (Day ${dayNumber}):`, matchedLesson);
   console.log(`[DEBUG] returnedTasks:`, matchedLesson?.tasks);
   console.log(`[DEBUG] allChamberTasks:`, allChamberTasks);
+  console.log(`[DEBUG] completedTaskIds:`, completedTaskIds);
 
   // Handle module initialization
   const handleInitializeModule = async () => {
@@ -264,13 +299,17 @@ const ChamberPage = () => {
     // 2. Save the task
     try {
       const dbType = (taskType === 'image' || taskType === 'pdf') ? 'text' : taskType;
+      const urlValue = contentUrl.trim();
+      const isYoutubeOrVimeo = urlValue.includes('youtube.com') || urlValue.includes('youtu.be') || urlValue.includes('vimeo.com');
+
       await saveTaskMutation.mutateAsync({
         lesson_id: targetLessonId,
         title: taskTitle.trim(),
         description: taskDescription.trim(),
         type: dbType as any,
         content: { 
-          url: contentUrl.trim(),
+          url: urlValue,
+          resource_url: isYoutubeOrVimeo ? urlValue : '',
           format: taskType 
         },
         order_index: (matchedLesson?.tasks?.length || 0) + 1
@@ -280,8 +319,10 @@ const ChamberPage = () => {
       setTaskTitle('');
       setTaskDescription('');
       setContentUrl('');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save task:', err);
+      const errMsg = err?.message || err?.error_description || String(err);
+      alert(`Failed to save task: ${errMsg}`);
     }
   };
 
@@ -296,6 +337,32 @@ const ChamberPage = () => {
     }
   };
 
+  // Handle task reopening (deleting completions to unlock task)
+  const handleReopenTask = async (taskId: string) => {
+    if (window.confirm('Are you sure you want to reopen this task? This will permanently delete all user completion history for this task to unlock it for editing and deletion.')) {
+      try {
+        const { error } = await supabase
+          .from('task_completions')
+          .delete()
+          .eq('task_id', taskId);
+
+        if (error) throw error;
+
+        // Update local state to unlock
+        setCompletedTaskIds(prev => {
+          const updated = new Set(prev);
+          updated.delete(taskId);
+          return updated;
+        });
+
+        alert('Task successfully reopened and unlocked.');
+      } catch (err: any) {
+        console.error('Failed to reopen task:', err);
+        alert(`Failed to reopen task: ${err.message || String(err)}`);
+      }
+    }
+  };
+
   // Open the edit task dialog and populate fields
   const handleOpenEditDialog = (task: any) => {
     setEditingTask(task);
@@ -305,6 +372,7 @@ const ChamberPage = () => {
     setEditContentUrl(task.content?.url || '');
     setEditResourceUrl(task.content?.resource_url || '');
     setEditDuration(task.content?.duration || '');
+    setEditIsUploading(false);
     setIsEditDialogOpen(true);
   };
 
@@ -326,11 +394,17 @@ const ChamberPage = () => {
       });
 
       setEditContentUrl(publicUrl);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Upload failed:', err);
-      alert('Upload failed. Ensure bucket "program-assets" exists.');
+      const errMsg = err?.message || err?.error_description || String(err);
+      if (errMsg.includes('exceeded the maximum allowed size') || errMsg.includes('exceed')) {
+        alert(`Upload failed: The file size (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the maximum allowed size of your Supabase storage bucket "program-assets".\n\nTo resolve this:\n1. Open your Supabase Dashboard.\n2. Navigate to Storage > Buckets > "program-assets".\n3. Click "Edit Bucket" (or the triple-dot menu next to the bucket name).\n4. Under "Maximum File Size", change the limit to a higher value (e.g., 50MB or 100MB).\n5. Save the configuration and retry the upload.`);
+      } else {
+        alert(`Upload failed: ${errMsg}`);
+      }
     } finally {
       setEditIsUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -340,13 +414,17 @@ const ChamberPage = () => {
     if (!editingTask || !editTitle.trim()) return;
 
     try {
+      const urlVal = editContentUrl.trim();
+      const resVal = editResourceUrl.trim();
+      const isYoutubeOrVimeo = urlVal.includes('youtube.com') || urlVal.includes('youtu.be') || urlVal.includes('vimeo.com') || resVal.includes('youtube.com') || resVal.includes('youtu.be') || resVal.includes('vimeo.com');
       const dbType = (editType === 'image' || editType === 'pdf') ? 'text' : editType;
+
       const updatedContent = {
         ...editingTask.content,
-        url: editContentUrl.trim(),
+        url: urlVal || (isYoutubeOrVimeo ? resVal : ''),
         text: editDescription.trim(),
         format: editType,
-        resource_url: editResourceUrl.trim(),
+        resource_url: resVal || (isYoutubeOrVimeo ? urlVal : ''),
         duration: editDuration.trim()
       };
 
@@ -439,11 +517,7 @@ const ChamberPage = () => {
               const anchor = tasks.map((t: any) => t.title).join(' · ');
               const instruction = tasks.map((t: any) => `<p>${t.description || t.content?.text || ''}</p>`).join('');
 
-              const systemName = windowName === 'Morning' ? 'Mental Clarity' : 
-                                 windowName === 'Mid-Morning' ? 'The Frequency Field' :
-                                 windowName === 'Midday' ? 'The Plate' :
-                                 windowName === 'Afternoon' ? 'Breath Atelier' :
-                                 windowName === 'Evening' ? 'The Signature' : 'Sleep Cocoon';
+              const systemName = matchedModule?.title || 'Daily Integration';
 
               return {
                 window: windowName,
@@ -466,8 +540,10 @@ const ChamberPage = () => {
       // Close dialog
       setIsEditDialogOpen(false);
       setEditingTask(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save edited task:', err);
+      const errMsg = err?.message || err?.error_description || String(err);
+      alert(`Failed to save task: ${errMsg}`);
     }
   };
 
@@ -510,6 +586,11 @@ const ChamberPage = () => {
                   label="Select Program"
                   onChange={(e) => setSelectedProgramId(e.target.value)}
                 >
+                  {selectedProgramId && !programs?.some(p => p.id === selectedProgramId) && (
+                    <MenuItem value={selectedProgramId} style={{ display: 'none' }}>
+                      Loading program...
+                    </MenuItem>
+                  )}
                   {isLoadingPrograms ? (
                     <MenuItem disabled><CircularProgress size={20} /></MenuItem>
                   ) : (
@@ -640,7 +721,15 @@ const ChamberPage = () => {
                       variant="contained"
                       startIcon={saveTaskMutation.isPending ? <CircularProgress size={16} /> : <Plus size={16} />}
                       disabled={saveTaskMutation.isPending || saveLessonMutation.isPending}
-                      sx={{ backgroundColor: 'var(--emerald-mid)', color: 'var(--emerald-primary)', fontWeight: 700 }}
+                      sx={{ 
+                        backgroundColor: 'var(--emerald-mid)', 
+                        color: 'var(--emerald-primary)', 
+                        fontWeight: 700,
+                        '&.Mui-disabled': {
+                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                          color: 'rgba(255, 255, 255, 0.25)'
+                        }
+                      }}
                     >
                       {saveTaskMutation.isPending || saveLessonMutation.isPending ? 'Saving...' : 'Add Task to Chamber'}
                     </Button>
@@ -707,18 +796,42 @@ const ChamberPage = () => {
                       </Box>
 
                       <Box sx={{ display: 'flex', gap: 1 }}>
+                        {completedTaskIds.has(task.id) && (
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleReopenTask(task.id)}
+                            title="Reopen Task (Deletes user completion to unlock editing)"
+                            sx={{ 
+                              color: '#D4AF37', 
+                              '&:hover': { color: '#FFD700' }
+                            }}
+                          >
+                            <Unlock size={16} />
+                          </IconButton>
+                        )}
                         <IconButton 
                           size="small" 
                           onClick={() => handleOpenEditDialog(task)}
-                          sx={{ color: 'rgba(255, 255, 255, 0.5)', '&:hover': { color: 'var(--emerald-primary)' } }}
+                          disabled={completedTaskIds.has(task.id)}
+                          title={completedTaskIds.has(task.id) ? "Task completed by user. Editing disabled." : "Edit Task"}
+                          sx={{ 
+                            color: 'rgba(255, 255, 255, 0.5)', 
+                            '&:hover': { color: 'var(--emerald-primary)' },
+                            '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.15)' }
+                          }}
                         >
                           <Edit size={16} />
                         </IconButton>
                         <IconButton 
                           size="small" 
                           onClick={() => handleDeleteTask(task.id)}
-                          disabled={deleteTaskMutation.isPending}
-                          sx={{ color: 'rgba(244, 67, 54, 0.5)', '&:hover': { color: '#f44336' } }}
+                          disabled={deleteTaskMutation.isPending || completedTaskIds.has(task.id)}
+                          title={completedTaskIds.has(task.id) ? "Task completed by user. Deletion disabled." : "Delete Task"}
+                          sx={{ 
+                            color: 'rgba(244, 67, 54, 0.5)', 
+                            '&:hover': { color: '#f44336' },
+                            '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.15)' }
+                          }}
                         >
                           <Trash2 size={16} />
                         </IconButton>
@@ -735,7 +848,10 @@ const ChamberPage = () => {
       {/* Edit Task Dialog */}
       <Dialog 
         open={isEditDialogOpen} 
-        onClose={() => setIsEditDialogOpen(false)}
+        onClose={() => {
+          setIsEditDialogOpen(false);
+          setEditIsUploading(false);
+        }}
         maxWidth="sm"
         fullWidth
         slotProps={{
@@ -868,7 +984,10 @@ const ChamberPage = () => {
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3, borderTop: '1px solid rgba(255, 255, 255, 0.08)', pt: 2 }}>
             <Button 
-              onClick={() => setIsEditDialogOpen(false)}
+              onClick={() => {
+                setIsEditDialogOpen(false);
+                setEditIsUploading(false);
+              }}
               sx={{ color: '#B0B0B0' }}
             >
               Cancel

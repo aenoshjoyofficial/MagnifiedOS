@@ -30,17 +30,16 @@ const Dashboard = () => {
 
   React.useEffect(() => {
     const findUserId = async () => {
-      const email = user?.email || 'aenoshjoy@gmail.com';
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('email', email)
-        .single();
-      
-      if (data) {
-        setTargetUserId(data.id);
-        setProfile(data);
+      if (user?.id) {
+        setTargetUserId(user.id);
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        if (data) setProfile(data);
       }
+      // No fallback to hardcoded email - if user is not authenticated, show empty state
     };
     findUserId();
   }, [user]);

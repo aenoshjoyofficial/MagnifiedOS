@@ -48,9 +48,11 @@ export const useMyEnrollment = (userId: string) => {
         `)
         .eq('user_id', userId)
         .eq('status', 'active')
+        .order('started_at', { ascending: false })
         .order('order_index', { foreignTable: 'programs.modules', ascending: true })
         .order('day_number', { foreignTable: 'programs.modules.lessons', ascending: true })
         .order('order_index', { foreignTable: 'programs.modules.lessons.tasks', ascending: true })
+        .limit(1)
         .maybeSingle();
       
       if (error) throw error;
