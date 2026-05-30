@@ -91,7 +91,11 @@ const TodayPractice = () => {
     return allLessons.find((l: any) => l.day_number === viewedDay) || allLessons.find((l: any) => l.day_number === 1) || allLessons[allLessons.length - 1];
   }, [allLessons, viewedDay]);
 
-  const tasks = currentLesson?.tasks || [];
+  const tasks = React.useMemo(() => {
+    return allLessons
+      .filter((l: any) => l.day_number === viewedDay)
+      .flatMap((l: any) => l.tasks || []);
+  }, [allLessons, viewedDay]);
   const completions = enrollment?.task_completions || [];
 
   const { completedTasks, isDayComplete, completedKeys } = React.useMemo(() => {
@@ -158,7 +162,14 @@ const TodayPractice = () => {
     );
   }
 
-  const parsedRoutine = parseRoutineFromHtml(currentLesson?.description || '');
+  const parsedRoutine = React.useMemo(() => {
+    const dayLessons = allLessons.filter((l: any) => l.day_number === viewedDay);
+    for (const l of dayLessons) {
+      const routine = parseRoutineFromHtml(l.description || '');
+      if (routine && routine.length > 0) return routine;
+    }
+    return null;
+  }, [allLessons, viewedDay]);
   
   const getTasksForWindow = (windowName: string) => {
     return tasks.filter((t: any) => {

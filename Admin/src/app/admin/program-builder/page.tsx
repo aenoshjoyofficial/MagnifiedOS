@@ -121,12 +121,13 @@ const ProgramBuilder = () => {
 
   const urlProgramId = searchParams.get('id');
   const [programId, setProgramId] = useState<string | null>(urlProgramId);
+  const [localModules, setLocalModules] = useState<any[]>([]);
 
-  const [taskSelectorAnchor, setTaskSelectorAnchor] = useState<null | HTMLElement>(null);
-  const [selectorDay, setSelectorDay] = useState<any>(null);
-  const [selectorWindow, setSelectorWindow] = useState<string>('');
-  const [selectorChamber, setSelectorChamber] = useState<string>('');
-  const [selectorSelectedTaskIds, setSelectorSelectedTaskIds] = useState<string[]>([]);
+  const [tempSelectedChamber, setTempSelectedChamber] = useState<{ [day: number]: string }>({});
+  const [tempSelectedTask, setTempSelectedTask] = useState<{ [day: number]: string }>({});
+  const [tempSelectedWindow, setTempSelectedWindow] = useState<{ [day: number]: string }>({});
+
+
 
   // Sync state with URL
   useEffect(() => {
@@ -175,7 +176,56 @@ const ProgramBuilder = () => {
     is_published: false
   });
 
-  const [localModules, setLocalModules] = useState<any[]>([]);
+  const [dayIndices, setDayIndices] = useState<number[]>([1]);
+  const [dayTitles, setDayTitles] = useState<{ [day: number]: string }>({});
+
+  useEffect(() => {
+    if (localModules) {
+      const existingDays = Array.from(new Set(
+        localModules.flatMap(m => m.lessons || [])
+          .map((l: any) => l.day_number)
+          .filter((d: number) => d > 0)
+      )).sort((a, b) => a - b);
+      setDayIndices(existingDays.length > 0 ? existingDays : [1]);
+
+      const titles: { [day: number]: string } = {};
+      localModules.forEach(m => {
+        m.lessons?.forEach((l: any) => {
+          if (l.day_number > 0 && l.title) {
+            titles[l.day_number] = l.title;
+          }
+        });
+      });
+      setDayTitles(titles);
+    }
+  }, [localModules]);
+
+  const handleUpdateDayTitle = async (dayNum: number, newTitle: string) => {
+    try {
+      setDayTitles(prev => ({ ...prev, [dayNum]: newTitle }));
+
+      // Update all lessons in the DB for this day number
+      for (const m of localModules) {
+        const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+        if (lesson) {
+          await saveLessonMutation.mutateAsync({
+            id: lesson.id,
+            title: newTitle
+          });
+        }
+      }
+
+      // Update local state lesson titles
+      setLocalModules(prev => prev.map(m => ({
+        ...m,
+        lessons: m.lessons?.map((l: any) =>
+          l.day_number === dayNum ? { ...l, title: newTitle } : l
+        ) || []
+      })));
+    } catch (err: any) {
+      console.error('Failed to update day title:', err);
+    }
+  };
 
   const getChambersWithTasksForDay = (dayNum: number) => {
     const list: { chamberKey: string; name: string; tasks: any[] }[] = [];
@@ -193,6 +243,266 @@ const ProgramBuilder = () => {
       }
     });
     return list;
+  };
+
+  const handleUpdateTaskWindow = async (task: any, newWindow: string, dayNum: number) => {
+    try {
+      const isUnassigning = newWindow === 'Unassigned';
+      let targetLessonId = task.lesson_id;
+
+      if (isUnassigning) {
+        let targetModule = localModules.find(m => m.lessons?.some((l: any) => l.id === task.lesson_id));
+        if (targetModule) {
+          let poolLesson = targetModule.lessons?.find((l: any) => l.day_number === 0);
+          if (!poolLesson) {
+            poolLesson = await saveLessonMutation.mutateAsync({
+              module_id: targetModule.id,
+              title: `Chamber Pool`,
+              day_number: 0,
+              unlock_day: 0
+            });
+            targetModule.lessons = [...(targetModule.lessons || []), { ...poolLesson, tasks: [] }];
+          }
+          targetLessonId = poolLesson.id;
+        }
+      }
+
+      const updatedTask = {
+        ...task,
+        lesson_id: targetLessonId,
+        content: {
+          ...(task.content || {}),
+          routine_window: isUnassigning ? '' : newWindow
+        }
+      };
+
+      // 1. Save updated task to DB
+      await saveTaskMutation.mutateAsync(updatedTask);
+
+      // 2. Update local state
+      const updatedModules = localModules.map(m => {
+        return {
+          ...m,
+          lessons: m.lessons?.map((l: any) => {
+            // If unassigning, remove from this day's lesson, add to pool (day_number: 0)
+            if (isUnassigning) {
+              if (l.day_number === dayNum) {
+                return {
+                  ...l,
+                  tasks: l.tasks?.filter((t: any) => t.id !== task.id) || []
+                };
+              }
+              if (l.id === targetLessonId) {
+                return {
+                  ...l,
+                  tasks: [...(l.tasks || []), updatedTask]
+                };
+              }
+            } else {
+              // Just update the window inside the current lesson
+              if (l.id === task.lesson_id) {
+                return {
+                  ...l,
+                  tasks: l.tasks?.map((t: any) => t.id === task.id ? updatedTask : t) || []
+                };
+              }
+            }
+            return l;
+          })
+        };
+      });
+      setLocalModules(updatedModules);
+
+      // 3. Compile daily routine HTML
+      const allDayTasks: any[] = [];
+      updatedModules.forEach(m => {
+        const chamberKey = matchChamberKey(m.title);
+        if (!chamberKey) return;
+        const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+        lesson?.tasks?.forEach((t: any) => {
+          allDayTasks.push({ ...t, chamberKey, chamberName: m.title });
+        });
+      });
+
+      const routineWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
+      const routineData = routineWindows.map(windowName => {
+        const tasks = allDayTasks.filter(t => t.content?.routine_window === windowName);
+        if (tasks.length === 0) return null;
+
+        const anchor = tasks.map(t => t.title).join(' · ');
+        const instruction = tasks.map(t => `<p>${t.description || t.content?.text || ''}</p>`).join('');
+
+        const systemName = windowName === 'Morning' ? 'Mental Clarity' : 
+                           windowName === 'Mid-Morning' ? 'The Frequency Field' :
+                           windowName === 'Midday' ? 'The Plate' :
+                           windowName === 'Afternoon' ? 'Breath Atelier' :
+                           windowName === 'Evening' ? 'The Signature' : 'Sleep Cocoon';
+
+        return {
+          window: windowName,
+          system: systemName,
+          anchor,
+          instruction
+        };
+      }).filter(Boolean);
+
+      const html = generateRoutineHtml(routineData as any);
+
+      // 4. Save the compiled description back to all chamber lessons of that day
+      for (const m of updatedModules) {
+        const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+        if (lesson) {
+          const { tasks, ...payload } = lesson;
+          await saveLessonMutation.mutateAsync({
+            ...payload,
+            description: html
+          });
+        }
+      }
+
+      // Update the local state descriptions too
+      setLocalModules(prev => prev.map(m => ({
+        ...m,
+        lessons: m.lessons?.map((l: any) => 
+          l.day_number === dayNum ? { ...l, description: html } : l
+        )
+      })));
+
+      setNotification({ open: true, message: 'Task allotment updated and routines synchronized!', severity: 'success' });
+    } catch (err) {
+      console.error(err);
+      setNotification({ open: true, message: 'Failed to update task allotment.', severity: 'error' });
+    }
+  };
+
+  const handleAllotTask = async (taskId: string, targetModuleId: string, targetDayNum: number, routineWindow: string) => {
+    try {
+      const module = localModules.find(m => m.id === targetModuleId);
+      if (!module) return;
+
+      // Find or create lesson for this Chamber module on targetDayNum
+      let dayLesson = module.lessons?.find((l: any) => l.day_number === targetDayNum);
+      if (!dayLesson) {
+        // Create lesson on targetDayNum
+        dayLesson = await saveLessonMutation.mutateAsync({
+          module_id: targetModuleId,
+          title: `${module.title} Day ${targetDayNum}`,
+          day_number: targetDayNum,
+          unlock_day: targetDayNum,
+          description: ''
+        });
+        module.lessons = [...(module.lessons || []), { ...dayLesson, tasks: [] }];
+      }
+
+      // Find the task in the pool
+      let taskToUpdate: any = null;
+      localModules.forEach(m => {
+        const poolLesson = m.lessons?.find((l: any) => l.day_number === 0);
+        const found = poolLesson?.tasks?.find((t: any) => t.id === taskId);
+        if (found) {
+          taskToUpdate = found;
+        }
+      });
+
+      if (!taskToUpdate) return;
+
+      // Update the task to point to the new day lesson and set the window
+      const updatedTask = {
+        ...taskToUpdate,
+        lesson_id: dayLesson.id,
+        content: {
+          ...(taskToUpdate.content || {}),
+          routine_window: routineWindow
+        }
+      };
+
+      await saveTaskMutation.mutateAsync(updatedTask);
+
+      // In local state, remove task from pool lesson and add to day lesson
+      const updatedModules = localModules.map(m => {
+        return {
+          ...m,
+          lessons: m.lessons?.map((l: any) => {
+            // Remove from pool
+            if (l.day_number === 0) {
+              return {
+                ...l,
+                tasks: l.tasks?.filter((t: any) => t.id !== taskId) || []
+              };
+            }
+            // Add to target day lesson
+            if (l.id === dayLesson.id) {
+              return {
+                ...l,
+                tasks: [...(l.tasks || []), updatedTask]
+              };
+            }
+            return l;
+          })
+        };
+      });
+
+      setLocalModules(updatedModules);
+
+      // Recompile the daily routine HTML
+      const allDayTasks: any[] = [];
+      updatedModules.forEach(m => {
+        const chamberKey = matchChamberKey(m.title);
+        if (!chamberKey) return;
+        const lesson = m.lessons?.find((l: any) => l.day_number === targetDayNum);
+        lesson?.tasks?.forEach((t: any) => {
+          allDayTasks.push({ ...t, chamberKey, chamberName: m.title });
+        });
+      });
+
+      const routineWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
+      const routineData = routineWindows.map(windowName => {
+        const tasks = allDayTasks.filter(t => t.content?.routine_window === windowName);
+        if (tasks.length === 0) return null;
+
+        const anchor = tasks.map(t => t.title).join(' · ');
+        const instruction = tasks.map(t => `<p>${t.description || t.content?.text || ''}</p>`).join('');
+
+        const systemName = windowName === 'Morning' ? 'Mental Clarity' : 
+                           windowName === 'Mid-Morning' ? 'The Frequency Field' :
+                           windowName === 'Midday' ? 'The Plate' :
+                           windowName === 'Afternoon' ? 'Breath Atelier' :
+                           windowName === 'Evening' ? 'The Signature' : 'Sleep Cocoon';
+
+        return {
+          window: windowName,
+          system: systemName,
+          anchor,
+          instruction
+        };
+      }).filter(Boolean);
+
+      const html = generateRoutineHtml(routineData as any);
+
+      // Save description to all chamber lessons of that day
+      for (const m of updatedModules) {
+        const lesson = m.lessons?.find((l: any) => l.day_number === targetDayNum);
+        if (lesson) {
+          const { tasks, ...payload } = lesson;
+          await saveLessonMutation.mutateAsync({
+            ...payload,
+            description: html
+          });
+        }
+      }
+
+      setLocalModules(prev => prev.map(m => ({
+        ...m,
+        lessons: m.lessons?.map((l: any) => 
+          l.day_number === targetDayNum ? { ...l, description: html } : l
+        )
+      })));
+
+      setNotification({ open: true, message: 'Task allotted successfully!', severity: 'success' });
+    } catch (err: any) {
+      console.error(err);
+      setNotification({ open: true, message: `Failed to allot task: ${err.message || err}`, severity: 'error' });
+    }
   };
 
   const syncLessonRoutine = async (lessonId: string, updatedModulesList?: any[]) => {
@@ -333,8 +643,11 @@ const ProgramBuilder = () => {
 
   const handlePublish = async () => {
     try {
-      await handleSave({ is_published: true });
+      const saved = await handleSave({ is_published: true });
       setNotification({ open: true, message: 'Program published and live!', severity: 'success' });
+      if (saved) {
+        setActiveTab('created');
+      }
     } catch (err) {
       // Error handled in handleSave
     }
@@ -342,8 +655,11 @@ const ProgramBuilder = () => {
 
   const handleSaveDraft = async () => {
     try {
-      await handleSave({ is_published: false });
+      const saved = await handleSave({ is_published: false });
       setNotification({ open: true, message: 'Draft saved successfully.', severity: 'success' });
+      if (saved) {
+        setActiveTab('created');
+      }
     } catch (err) {
       // Error handled in handleSave
     }
@@ -566,160 +882,66 @@ const ProgramBuilder = () => {
     setIsSyncingAll(true);
     setSyncProgress(0);
     try {
-      let totalLessons = 0;
-      localModules.forEach(m => {
-        totalLessons += (m.lessons || []).length;
-      });
+      const duration = programData.duration_days || 30;
+      const updatedModules = JSON.parse(JSON.stringify(localModules));
 
-      if (totalLessons === 0) {
-        setNotification({ open: true, message: 'No lessons found to sync.', severity: 'error' });
-        setIsSyncingAll(false);
-        return;
-      }
-
-      let processed = 0;
-      const newModules = JSON.parse(JSON.stringify(localModules));
-
-      for (let mIdx = 0; mIdx < newModules.length; mIdx++) {
-        const module = newModules[mIdx];
-        const moduleChamberKey = matchChamberKey(module.title);
-
-        if (!moduleChamberKey) continue;
-
-        for (let lIdx = 0; lIdx < (module.lessons || []).length; lIdx++) {
-          const lesson = module.lessons[lIdx];
-          const dayNum = lesson.day_number || 1;
-
-          // 1. Sync Routine Description
-          const formatStepsHtml = (s: ChamberScript) => {
-            let html = `<strong>When:</strong> ${s.when || 'Varies'} | <strong>Duration:</strong> ${s.duration || 'Varies'}<br/><br/>`;
-            if (s.steps && s.steps.length > 0) {
-              html += '<strong>Steps:</strong><ul>';
-              s.steps.forEach((step: ChamberStep) => {
-                let assetLink = '';
-                if (step.contentUrl) {
-                  assetLink = ` (<a href="${step.contentUrl}" target="_blank" style="color:#D4AF37;text-decoration:underline;">View Asset</a>)`;
-                }
-                html += `<li>[${step.type.toUpperCase()}] ${step.title}${assetLink}</li>`;
-              });
-              html += '</ul>';
-            }
-            if (s.directive) {
-              html += `<br/><strong>DIRECTIVE:</strong><br/><em>${s.directive}</em>`;
-            }
-            return html;
-          };
-
-          const routineData: any[] = [];
-          CHAMBER_KEYS.forEach(chamberKey => {
-            const script = getChamberScriptForProgram(programId, chamberKey, dayNum);
-            if ((script.steps && script.steps.length > 0) || script.directive) {
-              const info = CHAMBERS_INFO[chamberKey as keyof typeof CHAMBERS_INFO];
-              const chamberName = info ? info.name : chamberKey.toUpperCase();
-              const defaultAnchor = info ? (info as any).defaultAnchor : 'Varies';
-              const window = getChamberWindow(chamberKey, script.when);
-              const chamberIndex = CHAMBER_KEYS.indexOf(chamberKey as any);
-
-              routineData.push({
-                window,
-                system: chamberName,
-                anchor: script.duration || defaultAnchor || 'Varies',
-                instruction: formatStepsHtml(script),
-                chamberIndex
-              });
-            }
+      for (let dayNum = 1; dayNum <= duration; dayNum++) {
+        // Compile daily routine HTML for this day
+        const allDayTasks: any[] = [];
+        updatedModules.forEach((m: any) => {
+          const chamberKey = matchChamberKey(m.title);
+          if (!chamberKey) return;
+          const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+          lesson?.tasks?.forEach((t: any) => {
+            allDayTasks.push({ ...t, chamberKey, chamberName: m.title });
           });
+        });
 
-          const orderMap: Record<string, number> = {
-            'Morning': 1,
-            'Mid-Morning': 2,
-            'Midday': 3,
-            'Afternoon': 4,
-            'Evening': 5,
-            'Night': 6
-          };
+        const routineWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
+        const routineData = routineWindows.map(windowName => {
+          const tasks = allDayTasks.filter(t => t.content?.routine_window === windowName);
+          if (tasks.length === 0) return null;
 
-          routineData.sort((a, b) => {
-            const orderA = orderMap[a.window] || 99;
-            const orderB = orderMap[b.window] || 99;
-            if (orderA !== orderB) return orderA - orderB;
-            return a.chamberIndex - b.chamberIndex;
-          });
+          const anchor = tasks.map(t => t.title).join(' · ');
+          const instruction = tasks.map(t => `<p>${t.description || t.content?.text || ''}</p>`).join('');
 
-          const cleanRoutineData = routineData.map(({ window, system, anchor, instruction }) => ({
-            window,
-            system,
+          const systemName = windowName === 'Morning' ? 'Mental Clarity' : 
+                             windowName === 'Mid-Morning' ? 'The Frequency Field' :
+                             windowName === 'Midday' ? 'The Plate' :
+                             windowName === 'Afternoon' ? 'Breath Atelier' :
+                             windowName === 'Evening' ? 'The Signature' : 'Sleep Cocoon';
+
+          return {
+            window: windowName,
+            system: systemName,
             anchor,
             instruction
-          }));
+          };
+        }).filter(Boolean);
 
-          const newDescription = generateRoutineHtml(cleanRoutineData);
-          lesson.description = newDescription;
+        const html = generateRoutineHtml(routineData as any);
 
-          const { tasks, ...payload } = lesson;
-          await saveLessonMutation.mutateAsync({
-            ...payload,
-            description: newDescription
-          });
-
-          // 2. Sync Tasks
-          const steps = getCombinedStepsForDay(programId, dayNum);
-          if (steps.length > 0) {
-            const existingTasks = lesson.tasks || [];
-            const updatedTasksList = [...existingTasks];
-
-            for (let sIdx = 0; sIdx < steps.length; sIdx++) {
-              const step = steps[sIdx];
-              const existingTaskIndex = updatedTasksList.findIndex(t => t.title === step.title);
-
-              let mappedType: 'checklist' | 'audio' | 'video' | 'text' = 'text';
-              if (step.type === 'audio') mappedType = 'audio';
-              else if (step.type === 'video') mappedType = 'video';
-              else mappedType = 'text';
-
-              const targetContent = {
-                routine_window: step.routineWindow,
-                url: step.contentUrl || '',
-                text: step.textContent || ''
-              };
-
-              if (existingTaskIndex >= 0) {
-                const existingTask = updatedTasksList[existingTaskIndex];
-                const contentDiffers = JSON.stringify(existingTask.content || {}) !== JSON.stringify(targetContent) || existingTask.type !== mappedType;
-
-                if (contentDiffers) {
-                  const updatedTask = {
-                    ...existingTask,
-                    type: mappedType,
-                    content: targetContent
-                  };
-                  await saveTaskMutation.mutateAsync(updatedTask);
-                  updatedTasksList[existingTaskIndex] = updatedTask;
-                }
-              } else {
-                const newTask = await saveTaskMutation.mutateAsync({
-                  lesson_id: lesson.id,
-                  title: step.title,
-                  type: mappedType,
-                  order_index: sIdx,
-                  content: targetContent
-                });
-                updatedTasksList.push(newTask);
-              }
-            }
-            lesson.tasks = updatedTasksList;
+        // Save description to all chamber lessons of that day
+        for (const m of updatedModules) {
+          const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+          if (lesson) {
+            const { tasks, ...payload } = lesson;
+            await saveLessonMutation.mutateAsync({
+              ...payload,
+              description: html
+            });
+            lesson.description = html;
           }
-
-          processed++;
-          setSyncProgress(Math.round((processed / totalLessons) * 100));
         }
+
+        setSyncProgress(Math.round((dayNum / duration) * 100));
       }
 
-      setLocalModules(newModules);
-      setNotification({ open: true, message: 'All lessons and tasks synced successfully!', severity: 'success' });
+      setLocalModules(updatedModules);
+      setNotification({ open: true, message: 'All daily routines re-compiled and synchronized!', severity: 'success' });
     } catch (err: any) {
       console.error(err);
-      setNotification({ open: true, message: `Failed to sync all: ${err.message || err}`, severity: 'error' });
+      setNotification({ open: true, message: `Failed to sync: ${err.message || err}`, severity: 'error' });
     } finally {
       setIsSyncingAll(false);
     }
@@ -738,7 +960,6 @@ const ProgramBuilder = () => {
 
     setIsInitializing(true);
     setInitProgress(0);
-    const duration = programData.duration_days || 30;
     const chambersList = [
       'MENTAL CLARITY',
       'THE FREQUENCY FIELD',
@@ -764,231 +985,32 @@ const ProgramBuilder = () => {
           order_index: i + 1
         });
 
-        const lessonsList: any[] = [];
-        const chamberKey = matchChamberKey(chamberTitle);
-        const dayTitles = getChamberDayTitlesForProgram(programId, chamberKey, duration);
-
-        // 2. Create Lessons for this module
-        for (let d = 1; d <= duration; d++) {
-          setInitStatusText(`Creating Lesson: ${chamberTitle} — Day ${d} of ${duration}...`);
-
-          const dayTitle = dayTitles.find(t => t.day === d)?.title || `Day ${d}`;
-
-          // Generate combined routine HTML
-          const formatStepsHtml = (s: ChamberScript) => {
-            let html = `<strong>When:</strong> ${s.when || 'Varies'} | <strong>Duration:</strong> ${s.duration || 'Varies'}<br/><br/>`;
-            if (s.steps && s.steps.length > 0) {
-              html += '<strong>Steps:</strong><ul>';
-              s.steps.forEach((step: ChamberStep) => {
-                let assetLink = '';
-                if (step.contentUrl) {
-                  assetLink = ` (<a href="${step.contentUrl}" target="_blank" style="color:#D4AF37;text-decoration:underline;">View Asset</a>)`;
-                }
-                html += `<li>[${step.type.toUpperCase()}] ${step.title}${assetLink}</li>`;
-              });
-              html += '</ul>';
-            }
-            if (s.directive) {
-              html += `<br/><strong>DIRECTIVE:</strong><br/><em>${s.directive}</em>`;
-            }
-            return html;
-          };
-
-          const routineData: any[] = [];
-          CHAMBER_KEYS.forEach(ck => {
-            const script = getChamberScriptForProgram(programId, ck, d);
-            if ((script.steps && script.steps.length > 0) || script.directive) {
-              const info = CHAMBERS_INFO[ck as keyof typeof CHAMBERS_INFO];
-              const chamberName = info ? info.name : ck.toUpperCase();
-              const defaultAnchor = info ? (info as any).defaultAnchor : 'Varies';
-              const window = getChamberWindow(ck, script.when);
-              const chamberIndex = CHAMBER_KEYS.indexOf(ck as any);
-
-              routineData.push({
-                window,
-                system: chamberName,
-                anchor: script.duration || defaultAnchor || 'Varies',
-                instruction: formatStepsHtml(script),
-                chamberIndex
-              });
-            }
-          });
-
-          const orderMap: Record<string, number> = {
-            'Morning': 1,
-            'Mid-Morning': 2,
-            'Midday': 3,
-            'Afternoon': 4,
-            'Evening': 5,
-            'Night': 6
-          };
-
-          routineData.sort((a, b) => {
-            const orderA = orderMap[a.window] || 99;
-            const orderB = orderMap[b.window] || 99;
-            if (orderA !== orderB) return orderA - orderB;
-            return a.chamberIndex - b.chamberIndex;
-          });
-
-          const cleanRoutineData = routineData.map(({ window, system, anchor, instruction }) => ({
-            window,
-            system,
-            anchor,
-            instruction
-          }));
-
-          const routineHtml = generateRoutineHtml(cleanRoutineData);
-
-          const newLesson = await saveLessonMutation.mutateAsync({
-            module_id: newMod.id,
-            title: dayTitle,
-            day_number: d,
-            unlock_day: d,
-            description: routineHtml
-          });
-
-          // 3. Sync Tasks for this lesson
-          const steps = getCombinedStepsForDay(programId, d);
-          const tasksList: any[] = [];
-          if (steps.length > 0) {
-            for (let sIdx = 0; sIdx < steps.length; sIdx++) {
-              const step = steps[sIdx];
-
-              let mappedType: 'checklist' | 'audio' | 'video' | 'text' = 'text';
-              if (step.type === 'audio') mappedType = 'audio';
-              else if (step.type === 'video') mappedType = 'video';
-              else mappedType = 'text';
-
-              const targetContent = {
-                routine_window: step.routineWindow,
-                url: step.contentUrl || '',
-                text: step.textContent || ''
-              };
-
-              const newTask = await saveTaskMutation.mutateAsync({
-                lesson_id: newLesson.id,
-                title: step.title,
-                type: mappedType,
-                order_index: sIdx,
-                content: targetContent
-              });
-              tasksList.push(newTask);
-            }
-          }
-
-          lessonsList.push({
-            ...newLesson,
-            tasks: tasksList
-          });
-
-          const currentTotalProcessed = i * duration + d;
-          const grandTotal = chambersList.length * duration;
-          setInitProgress(Math.round((currentTotalProcessed / grandTotal) * 100));
-        }
+        // 2. Create the Chamber Pool Lesson (day_number = 0)
+        setInitStatusText(`Creating Pool for ${chamberTitle}...`);
+        const poolLesson = await saveLessonMutation.mutateAsync({
+          module_id: newMod.id,
+          title: `Chamber Pool`,
+          day_number: 0,
+          unlock_day: 0,
+          description: '<p>Chamber tasks pool</p>'
+        });
 
         initializedModules.push({
           ...newMod,
-          lessons: lessonsList
+          lessons: [{ ...poolLesson, tasks: [] }]
         });
+
+        setInitProgress(Math.round(((i + 1) / chambersList.length) * 100));
       }
 
       setLocalModules([...(localModules || []), ...initializedModules]);
-      setNotification({ open: true, message: `Successfully initialized standard ${duration}-day structure and synced all tasks/routines!`, severity: 'success' });
+      setNotification({ open: true, message: '8 Chambers initialized successfully with generic task pools!', severity: 'success' });
     } catch (err: any) {
       console.error(err);
-      setNotification({ open: true, message: `Initialization failed: ${err.message || err}`, severity: 'error' });
+      setNotification({ open: true, message: `Failed to initialize: ${err.message || err}`, severity: 'error' });
     } finally {
       setIsInitializing(false);
       setInitStatusText('');
-    }
-  };
-
-  const syncTasksFromChambers = async () => {
-    if (!localModules || localModules.length === 0) return;
-
-    let syncedAny = false;
-    const newModules = JSON.parse(JSON.stringify(localModules));
-
-    for (let mIdx = 0; mIdx < newModules.length; mIdx++) {
-      const module = newModules[mIdx];
-      const moduleChamberKey = matchChamberKey(module.title);
-
-      if (!moduleChamberKey) continue;
-
-      for (let lIdx = 0; lIdx < (module.lessons || []).length; lIdx++) {
-        const lesson = module.lessons[lIdx];
-        const dayNum = lesson.day_number || 1;
-        const steps = getCombinedStepsForDay(programId, dayNum);
-
-        if (steps.length === 0) continue;
-
-        const existingTasks = lesson.tasks || [];
-        const updatedTasksList = [...existingTasks];
-        let lessonUpdated = false;
-
-        for (let sIdx = 0; sIdx < steps.length; sIdx++) {
-          const step = steps[sIdx];
-
-          const existingTaskIndex = updatedTasksList.findIndex(t => t.title === step.title);
-
-          let mappedType: 'checklist' | 'audio' | 'video' | 'text' = 'text';
-          if (step.type === 'audio') mappedType = 'audio';
-          else if (step.type === 'video') mappedType = 'video';
-          else mappedType = 'text';
-
-          const targetContent = {
-            routine_window: step.routineWindow,
-            url: step.contentUrl || '',
-            text: step.textContent || ''
-          };
-
-          if (existingTaskIndex >= 0) {
-            const existingTask = updatedTasksList[existingTaskIndex];
-            const contentDiffers = JSON.stringify(existingTask.content || {}) !== JSON.stringify(targetContent) || existingTask.type !== mappedType;
-
-            if (contentDiffers) {
-              const updatedTask = {
-                ...existingTask,
-                type: mappedType,
-                content: targetContent
-              };
-
-              await saveTaskMutation.mutateAsync(updatedTask);
-              updatedTasksList[existingTaskIndex] = updatedTask;
-              lessonUpdated = true;
-              syncedAny = true;
-            }
-          } else {
-            const newTask = await saveTaskMutation.mutateAsync({
-              lesson_id: lesson.id,
-              title: step.title,
-              type: mappedType,
-              order_index: sIdx,
-              content: targetContent
-            });
-
-            updatedTasksList.push(newTask);
-            lessonUpdated = true;
-            syncedAny = true;
-          }
-        }
-
-        if (lessonUpdated) {
-          module.lessons[lIdx] = {
-            ...lesson,
-            tasks: updatedTasksList
-          };
-        }
-      }
-    }
-
-    if (syncedAny) {
-      setLocalModules(newModules);
-      setNotification({
-        open: true,
-        message: 'Successfully auto-synced tasks from Chambers configuration.',
-        severity: 'success'
-      });
     }
   };
 
@@ -1217,7 +1239,6 @@ const ProgramBuilder = () => {
             {[
               { id: 'settings', label: 'General Settings', icon: Settings },
               { id: 'modules', label: 'Days & Tasks', icon: GripVertical },
-              { id: 'tasks', label: 'Task Engineering', icon: Plus },
               { id: 'created', label: 'Created Program', icon: FolderOpen },
             ].map((tab) => (
               <Button
@@ -1506,71 +1527,14 @@ const ProgramBuilder = () => {
               <Typography variant="h6" sx={{ fontWeight: 800 }}>Days & Tasks Configuration</Typography>
               <Button
                 variant="contained"
-                startIcon={<Plus size={18} />}
-                onClick={async () => {
-                  if (!programId) {
-                    setNotification({ open: true, message: 'Please save the program settings first.', severity: 'error' });
-                    return;
-                  }
-                  // 1. Ensure we have a main module for daily protocols
-                  let mainMod = localModules.find(m => m.title === 'Daily Protocols' || m.title === 'Program Protocols');
-                  if (!mainMod && localModules.length > 0) {
-                    mainMod = localModules[0];
-                  }
-                  if (!mainMod) {
-                    try {
-                      mainMod = await saveModuleMutation.mutateAsync({
-                        program_id: programId,
-                        title: 'Daily Protocols',
-                        order_index: 1
-                      });
-                      setLocalModules([ { ...mainMod, lessons: [] } ]);
-                    } catch (err) {
-                      setNotification({ open: true, message: 'Failed to initialize protocols container.', severity: 'error' });
-                      return;
-                    }
-                  }
-
-                  // 2. Add a new Day (lesson) to this module
-                  try {
-                    let maxDay = 0;
-                    localModules.forEach(m => {
-                      m.lessons?.forEach((l: any) => {
-                        if (l.day_number > maxDay) maxDay = l.day_number;
-                      });
-                    });
-
-                    const newDayNumber = maxDay + 1;
-                    const defaultRoutine = [
-                      { window: 'Morning', system: 'Mental Clarity', anchor: 'Daily focus', instruction: '' },
-                      { window: 'Mid-Morning', system: 'Activation', anchor: 'Routine', instruction: '' },
-                      { window: 'Midday', system: 'Nutrition', anchor: 'Meal check', instruction: '' },
-                      { window: 'Afternoon', system: 'Reset', anchor: 'Audio guide', instruction: '' },
-                      { window: 'Evening', system: 'Parasympathetic Descent', anchor: 'Relaxation', instruction: '' },
-                      { window: 'Night', system: 'Sleep Cocoon', anchor: 'Sleep prep', instruction: '' }
-                    ];
-                    const defaultHtml = generateRoutineHtml(defaultRoutine);
-
-                    const newLesson = await saveLessonMutation.mutateAsync({
-                      module_id: mainMod.id,
-                      title: `Day ${newDayNumber} Protocol`,
-                      day_number: newDayNumber,
-                      unlock_day: newDayNumber,
-                      description: defaultHtml
-                    });
-
-                    setLocalModules(prev => prev.map(m => 
-                      m.id === mainMod.id ? { ...m, lessons: [...(m.lessons || []), { ...newLesson, tasks: [] }] } : m
-                    ));
-                    setNotification({ open: true, message: `Day ${newDayNumber} added!`, severity: 'success' });
-                  } catch (err) {
-                    setNotification({ open: true, message: 'Failed to add Day.', severity: 'error' });
-                  }
+                onClick={() => {
+                  const nextDay = dayIndices.length > 0 ? Math.max(...dayIndices) + 1 : 1;
+                  setDayIndices([...dayIndices, nextDay]);
                 }}
-                disabled={!programId}
-                sx={{ backgroundColor: 'var(--emerald-primary)', color: '#0B0B0F', fontWeight: 700, '&:hover': { backgroundColor: 'var(--emerald-light)' } }}
+                startIcon={<Plus size={16} />}
+                sx={{ backgroundColor: 'var(--emerald-primary)', color: '#0B0B0F', fontWeight: 700 }}
               >
-                Add Day
+                Add Day Allotment
               </Button>
             </Box>
 
@@ -1583,388 +1547,244 @@ const ProgramBuilder = () => {
             ) : (
               <Stack spacing={4}>
                 {(() => {
-                  const allDays: any[] = [];
-                  localModules.forEach(m => {
-                    m.lessons?.forEach((l: any) => {
-                      allDays.push({ ...l, moduleId: m.id });
+                  return dayIndices.map((dayNum) => {
+                    // Gather all tasks created in any chamber for this day
+                    const dayTasks: any[] = [];
+                    localModules.forEach(m => {
+                      const lesson = m.lessons?.find((l: any) => l.day_number === dayNum);
+                      lesson?.tasks?.forEach((t: any) => {
+                        dayTasks.push({
+                          ...t,
+                          chamberName: m.title,
+                          lessonId: lesson.id
+                        });
+                      });
                     });
-                  });
 
-                  allDays.sort((a, b) => (a.day_number || 0) - (b.day_number || 0));
-
-                  if (allDays.length === 0) {
                     return (
-                      <Paper sx={{ p: 4, textAlign: 'center', border: '1px dashed rgba(255, 255, 255, 0.1)' }}>
-                        <Typography variant="body1" sx={{ color: '#888', mb: 2 }}>
-                          No days/protocols configured for this program yet.
-                        </Typography>
-                      </Paper>
-                    );
-                  }
-
-                  return allDays.map((day) => (
-                    <Paper 
-                      key={day.id} 
-                      sx={{ 
-                        p: 3, 
-                        border: '1px solid rgba(255, 255, 255, 0.05)', 
-                        backgroundColor: 'rgba(255, 255, 255, 0.01)',
-                        borderRadius: 2
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 3 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
+                      <Paper 
+                        key={dayNum} 
+                        sx={{ 
+                          p: 3, 
+                          border: '1px solid rgba(255, 255, 255, 0.05)', 
+                          backgroundColor: 'rgba(255, 255, 255, 0.01)',
+                          borderRadius: 2
+                        }}
+                      >
+                        <Box sx={{ mb: 2 }}>
                           <TextField
-                            size="small"
-                            type="number"
-                            label="Day #"
-                            value={day.day_number}
-                            onChange={(e) => updateLessonDayNumber(day.moduleId, day.id, Math.max(1, parseInt(e.target.value) || 1))}
-                            onBlur={() => persistLesson(day)}
-                            sx={{ width: 80 }}
-                            slotProps={{ htmlInput: { min: 1 } }}
+                            variant="standard"
+                            value={dayTitles[dayNum] !== undefined ? dayTitles[dayNum] : `Day ${dayNum}: Protocol Allotment`}
+                            onChange={(e) => setDayTitles(prev => ({ ...prev, [dayNum]: e.target.value }))}
+                            onBlur={(e) => handleUpdateDayTitle(dayNum, e.target.value)}
+                            slotProps={{
+                              input: {
+                                sx: {
+                                  fontSize: '1.25rem',
+                                  fontWeight: 800,
+                                  color: 'var(--emerald-primary)',
+                                  borderBottom: '1px dashed rgba(16, 185, 129, 0.3)',
+                                  '&:hover': { borderBottom: '1px dashed var(--emerald-primary)' }
+                                }
+                              }
+                            }}
+                            fullWidth
                           />
-                          <TextField
-                            size="small"
-                            label="Day Protocol Title"
-                            value={day.title}
-                            onChange={(e) => updateLessonTitle(day.moduleId, day.id, e.target.value)}
-                            onBlur={() => persistLesson(day)}
-                            sx={{ flexGrow: 1, maxWidth: 400 }}
-                          />
+                          <Typography variant="caption" sx={{ color: '#B0B0B0', mt: 1, display: 'block' }}>
+                            Rename the title above. Allot tasks configured in the Chambers for this day.
+                          </Typography>
                         </Box>
-                        <IconButton 
-                          color="error" 
-                          onClick={() => handleDeleteLesson(day.moduleId, day.id)}
-                          sx={{ '&:hover': { backgroundColor: 'rgba(244, 67, 54, 0.05)' } }}
-                        >
-                          <Trash2 size={18} />
-                        </IconButton>
-                      </Box>
 
-                      <Divider sx={{ mb: 3, opacity: 0.05 }} />
+                        {/* Task Allotment Form for this Day */}
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 3, p: 2, backgroundColor: 'rgba(255, 255, 255, 0.02)', borderRadius: 1, border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#eaeaea' }}>
+                            Allot Task:
+                          </Typography>
 
-                      <Grid container spacing={3}>
-                        {['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'].map((windowName) => {
-                          const windowTasks = day.tasks?.filter((t: any) => t.content?.routine_window === windowName) || [];
-                          return (
-                            <Grid size={{ xs: 12, md: 6 }} key={windowName}>
-                              <Paper sx={{ p: 2, backgroundColor: 'rgba(255, 255, 255, 0.01)', border: '1px solid rgba(255, 255, 255, 0.03)' }}>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                  <Typography variant="subtitle2" sx={{ color: '#D4AF37', fontWeight: 800 }}>
-                                    {windowName.toUpperCase()}
+                          {/* 1. Chamber Select */}
+                          <FormControl size="small" sx={{ minWidth: 180 }}>
+                            <InputLabel id={`chamber-select-label-${dayNum}`} sx={{ fontSize: '0.8rem' }}>Chamber</InputLabel>
+                            <Select
+                              labelId={`chamber-select-label-${dayNum}`}
+                              label="Chamber"
+                              value={tempSelectedChamber[dayNum] || ''}
+                              onChange={(e) => {
+                                setTempSelectedChamber(prev => ({ ...prev, [dayNum]: e.target.value }));
+                                setTempSelectedTask(prev => ({ ...prev, [dayNum]: '' })); // reset task selection
+                              }}
+                              sx={{ fontSize: '0.8rem' }}
+                            >
+                              {localModules.map(m => (
+                                <MenuItem key={m.id} value={m.id} sx={{ fontSize: '0.8rem' }}>{m.title}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+
+                          {/* 2. Task Select */}
+                          <FormControl size="small" sx={{ minWidth: 220 }} disabled={!tempSelectedChamber[dayNum]}>
+                            <InputLabel id={`task-select-label-${dayNum}`} sx={{ fontSize: '0.8rem' }}>Select Task</InputLabel>
+                            <Select
+                              labelId={`task-select-label-${dayNum}`}
+                              label="Select Task"
+                              value={tempSelectedTask[dayNum] || ''}
+                              onChange={(e) => setTempSelectedTask(prev => ({ ...prev, [dayNum]: e.target.value }))}
+                              sx={{ fontSize: '0.8rem' }}
+                            >
+                              {(() => {
+                                const selectedChamberMod = localModules.find(m => m.id === tempSelectedChamber[dayNum]);
+                                const poolLesson = selectedChamberMod?.lessons?.find((l: any) => l.day_number === 0);
+                                const poolTasks = poolLesson?.tasks || [];
+                                if (poolTasks.length === 0) {
+                                  return <MenuItem disabled value="" sx={{ fontSize: '0.8rem' }}>No unallotted tasks in this chamber</MenuItem>;
+                                }
+                                return poolTasks.map((t: any) => (
+                                  <MenuItem key={t.id} value={t.id} sx={{ fontSize: '0.8rem' }}>{t.title}</MenuItem>
+                                ));
+                              })()}
+                            </Select>
+                          </FormControl>
+
+                          {/* 3. Routine Window Select */}
+                          <FormControl size="small" sx={{ minWidth: 150 }} disabled={!tempSelectedTask[dayNum]}>
+                            <InputLabel id={`window-select-label-${dayNum}`} sx={{ fontSize: '0.8rem' }}>Window</InputLabel>
+                            <Select
+                              labelId={`window-select-label-${dayNum}`}
+                              label="Window"
+                              value={tempSelectedWindow[dayNum] || 'Morning'}
+                              onChange={(e) => setTempSelectedWindow(prev => ({ ...prev, [dayNum]: e.target.value }))}
+                              sx={{ fontSize: '0.8rem' }}
+                            >
+                              {['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'].map((w) => (
+                                <MenuItem key={w} value={w} sx={{ fontSize: '0.8rem' }}>{w}</MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+
+                          <Button
+                            variant="contained"
+                            size="small"
+                            onClick={() => handleAllotTask(
+                              tempSelectedTask[dayNum],
+                              tempSelectedChamber[dayNum],
+                              dayNum,
+                              tempSelectedWindow[dayNum] || 'Morning'
+                            )}
+                            disabled={!tempSelectedTask[dayNum]}
+                            sx={{ backgroundColor: 'var(--emerald-primary)', color: '#0B0B0F', fontWeight: 700, ml: 'auto' }}
+                          >
+                            Allot Task
+                          </Button>
+                        </Box>
+
+                        <Divider sx={{ mb: 3, opacity: 0.05 }} />
+
+                        <Grid container spacing={3}>
+                          {['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night', 'Unassigned'].map((windowName) => {
+                            const windowTasks = dayTasks.filter((t: any) => {
+                              const taskWindow = t.content?.routine_window || 'Unassigned';
+                              if (windowName === 'Unassigned') {
+                                return !t.content?.routine_window || t.content?.routine_window === 'Unassigned';
+                              }
+                              return taskWindow === windowName;
+                            });
+
+                            return (
+                              <Grid size={{ xs: 12, md: 6 }} key={windowName}>
+                                <Paper 
+                                  sx={{ 
+                                    p: 2, 
+                                    backgroundColor: 'rgba(255, 255, 255, 0.01)', 
+                                    border: '1px solid rgba(255, 255, 255, 0.03)',
+                                    minHeight: 120
+                                  }}
+                                >
+                                  <Typography variant="subtitle2" sx={{ color: windowName === 'Unassigned' ? '#888' : '#D4AF37', fontWeight: 800, mb: 2 }}>
+                                    {windowName.toUpperCase()} {windowName === 'Unassigned' && '(NOT ALLOTTED)'}
                                   </Typography>
-                                  <Button
-                                    size="small"
-                                    startIcon={<Plus size={12} />}
-                                    onClick={(e) => {
-                                      setTaskSelectorAnchor(e.currentTarget);
-                                      setSelectorDay(day);
-                                      setSelectorWindow(windowName);
-                                      setSelectorChamber('');
-                                      setSelectorSelectedTaskIds([]);
-                                    }}
-                                    sx={{ color: 'var(--emerald-primary)', textTransform: 'none', fontSize: '0.75rem' }}
-                                  >
-                                    Add Task
-                                  </Button>
-                                </Box>
 
-                                <Stack spacing={2}>
-                                  {windowTasks.map((task: any) => (
-                                    <Box 
-                                      key={task.id} 
-                                      sx={{ 
-                                        p: 2, 
-                                        borderRadius: 1, 
-                                        backgroundColor: 'rgba(255,255,255,0.02)', 
-                                        border: '1px solid rgba(255,255,255,0.05)' 
-                                      }}
-                                    >
-                                      <Stack spacing={1.5}>
-                                        <Box sx={{ display: 'flex', gap: 1 }}>
-                                          <TextField
-                                            fullWidth
-                                            size="small"
-                                            label="Task Name"
-                                            value={task.title}
-                                            onChange={(e) => updateTaskTitle(day.id, task.id, e.target.value)}
-                                            onBlur={() => persistTask(task)}
-                                          />
-                                          <FormControl size="small" sx={{ minWidth: 100 }}>
+                                  <Stack spacing={2}>
+                                    {windowTasks.map((task: any) => (
+                                      <Box 
+                                        key={task.id} 
+                                        sx={{ 
+                                          p: 2, 
+                                          borderRadius: 1, 
+                                          backgroundColor: 'rgba(255,255,255,0.02)', 
+                                          border: '1px solid rgba(255,255,255,0.05)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'space-between',
+                                          gap: 2
+                                        }}
+                                      >
+                                        <Box>
+                                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                            {task.title}
+                                          </Typography>
+                                          <Typography variant="caption" sx={{ color: '#888', display: 'block' }}>
+                                            Chamber: {task.chamberName} • {task.type?.toUpperCase()}
+                                          </Typography>
+                                        </Box>
+
+                                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                                          <FormControl size="small" sx={{ minWidth: 140 }}>
                                             <Select
-                                              value={task.type || 'text'}
-                                              onChange={async (e) => {
-                                                const newType = e.target.value;
-                                                const updated = localModules.map(m => ({
-                                                  ...m,
-                                                  lessons: m.lessons?.map((l: any) => 
-                                                    l.id === day.id ? {
-                                                      ...l,
-                                                      tasks: l.tasks?.map((t: any) => t.id === task.id ? { ...t, type: newType } : t)
-                                                    } : l
-                                                  )
-                                                }));
-                                                setLocalModules(updated);
-                                                await persistTask({ ...task, type: newType });
-                                              }}
+                                              value={task.content?.routine_window || 'Unassigned'}
+                                              onChange={(e) => handleUpdateTaskWindow(task, e.target.value, dayNum)}
+                                              sx={{ backgroundColor: 'rgba(0,0,0,0.2)', fontSize: '0.8rem' }}
                                             >
-                                              <MenuItem value="text">Text</MenuItem>
-                                              <MenuItem value="audio">Audio</MenuItem>
-                                              <MenuItem value="video">Video</MenuItem>
-                                              <MenuItem value="checklist">Checklist</MenuItem>
+                                              <MenuItem value="Unassigned" sx={{ fontSize: '0.8rem' }}>Unassigned</MenuItem>
+                                              <MenuItem value="Morning" sx={{ fontSize: '0.8rem' }}>Morning</MenuItem>
+                                              <MenuItem value="Mid-Morning" sx={{ fontSize: '0.8rem' }}>Mid-Morning</MenuItem>
+                                              <MenuItem value="Midday" sx={{ fontSize: '0.8rem' }}>Midday</MenuItem>
+                                              <MenuItem value="Afternoon" sx={{ fontSize: '0.8rem' }}>Afternoon</MenuItem>
+                                              <MenuItem value="Evening" sx={{ fontSize: '0.8rem' }}>Evening</MenuItem>
+                                              <MenuItem value="Night" sx={{ fontSize: '0.8rem' }}>Night</MenuItem>
                                             </Select>
                                           </FormControl>
-                                          <IconButton 
-                                            color="error" 
+
+                                          <IconButton
                                             size="small"
-                                            onClick={() => handleDeleteTask(day.id, task.id)}
+                                            onClick={() => {
+                                              if (window.confirm('Are you sure you want to permanently delete this task?')) {
+                                                handleDeleteTask(task.lessonId || task.lesson_id, task.id);
+                                              }
+                                            }}
+                                            sx={{ color: '#f44336', '&:hover': { backgroundColor: 'rgba(244, 67, 54, 0.05)' } }}
+                                            title="Permanently Delete Task"
                                           >
                                             <Trash2 size={16} />
                                           </IconButton>
-                                        </Box>
+                                        </Stack>
+                                      </Box>
+                                    ))}
 
-                                        <TextField
-                                          fullWidth
-                                          size="small"
-                                          label="Instructions / Text Content"
-                                          multiline
-                                          rows={2}
-                                          value={task.content?.text || ''}
-                                          onChange={(e) => {
-                                            const newText = e.target.value;
-                                            setLocalModules(prev => prev.map(m => ({
-                                              ...m,
-                                              lessons: m.lessons?.map((l: any) => 
-                                                l.id === day.id ? {
-                                                  ...l,
-                                                  tasks: l.tasks?.map((t: any) => 
-                                                    t.id === task.id ? { 
-                                                      ...t, 
-                                                      content: { ...t.content, text: newText } 
-                                                    } : t
-                                                  )
-                                                } : l
-                                              )
-                                            })));
-                                          }}
-                                          onBlur={() => persistTask(task)}
-                                        />
-
-                                        {(task.type === 'audio' || task.type === 'video') && (
-                                          <TextField
-                                            fullWidth
-                                            size="small"
-                                            label="Media URL"
-                                            value={task.content?.url || ''}
-                                            onChange={(e) => {
-                                              const newUrl = e.target.value;
-                                              setLocalModules(prev => prev.map(m => ({
-                                                ...m,
-                                                lessons: m.lessons?.map((l: any) => 
-                                                  l.id === day.id ? {
-                                                    ...l,
-                                                    tasks: l.tasks?.map((t: any) => 
-                                                      t.id === task.id ? { 
-                                                        ...t, 
-                                                        content: { ...t.content, url: newUrl } 
-                                                      } : t
-                                                    )
-                                                  } : l
-                                                )
-                                              })));
-                                            }}
-                                            onBlur={() => persistTask(task)}
-                                          />
-                                        )}
-                                      </Stack>
-                                    </Box>
-                                  ))}
-
-                                  {windowTasks.length === 0 && (
-                                    <Typography variant="caption" sx={{ color: '#444', fontStyle: 'italic', display: 'block', textAlign: 'center', py: 1 }}>
-                                      No tasks for this window
-                                    </Typography>
-                                  )}
-                                </Stack>
-                              </Paper>
-                            </Grid>
-                          );
-                        })}
-                      </Grid>
-                    </Paper>
-                  ));
+                                    {windowTasks.length === 0 && (
+                                      <Typography variant="caption" sx={{ color: '#444', fontStyle: 'italic', display: 'block', textAlign: 'center', py: 2 }}>
+                                        No tasks in this window
+                                      </Typography>
+                                    )}
+                                  </Stack>
+                                </Paper>
+                              </Grid>
+                            );
+                          })}
+                        </Grid>
+                      </Paper>
+                    );
+                  });
                 })()}
               </Stack>
             )}
           </Box>
         )}
 
-        {activeTab === 'tasks' && (
-          <Box sx={{ minHeight: '40vh' }} />
-        )}
+
 
         {activeTab === 'created' && (
           <CreatedProgramTab />
         )}
       </Box>
-
-      {/* Popover / Menu for Selecting Tasks from Chambers */}
-      <Popover
-        open={Boolean(taskSelectorAnchor)}
-        anchorEl={taskSelectorAnchor}
-        onClose={() => {
-          setTaskSelectorAnchor(null);
-          setSelectorDay(null);
-          setSelectorWindow('');
-          setSelectorChamber('');
-          setSelectorSelectedTaskIds([]);
-        }}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'left',
-        }}
-        slotProps={{
-          paper: {
-            sx: { p: 3, width: 320, backgroundColor: '#121217', border: '1px solid var(--emerald-mid)', borderRadius: 2 }
-          }
-        }}
-      >
-        <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 2, color: 'var(--emerald-primary)' }}>
-          Add Tasks to {selectorWindow}
-        </Typography>
-        <Stack spacing={2}>
-          <FormControl fullWidth size="small">
-            <InputLabel id="select-chamber-label" sx={{ color: '#888' }}>Select Chamber</InputLabel>
-            <Select
-              labelId="select-chamber-label"
-              value={selectorChamber}
-              label="Select Chamber"
-              onChange={(e) => {
-                setSelectorChamber(e.target.value);
-                setSelectorSelectedTaskIds([]);
-              }}
-              sx={{ backgroundColor: 'rgba(0,0,0,0.2)' }}
-            >
-              {selectorDay && getChambersWithTasksForDay(selectorDay.day_number).map(c => (
-                <MenuItem key={c.chamberKey} value={c.chamberKey} disabled={c.tasks.length === 0}>
-                  {c.name} ({c.tasks.length} tasks)
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          {selectorChamber && (() => {
-            const chambers = getChambersWithTasksForDay(selectorDay.day_number);
-            const activeChamber = chambers.find(c => c.chamberKey === selectorChamber);
-            const availableTasks = activeChamber?.tasks || [];
-
-            return (
-              <FormControl fullWidth size="small" disabled={availableTasks.length === 0}>
-                <InputLabel id="select-tasks-label" sx={{ color: '#888' }}>Select Tasks</InputLabel>
-                <Select
-                  labelId="select-tasks-label"
-                  multiple
-                  value={selectorSelectedTaskIds}
-                  label="Select Tasks"
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setSelectorSelectedTaskIds(typeof val === 'string' ? val.split(',') : val);
-                  }}
-                  renderValue={(selected) => `${selected.length} task(s) selected`}
-                  sx={{ backgroundColor: 'rgba(0,0,0,0.2)' }}
-                >
-                  {availableTasks.map((t) => (
-                    <MenuItem key={t.id} value={t.id}>
-                      <Checkbox checked={selectorSelectedTaskIds.indexOf(t.id) > -1} sx={{ color: 'var(--emerald-primary)', '&.Mui-checked': { color: 'var(--emerald-primary)' } }} />
-                      <ListItemText primary={t.title} secondary={t.type} />
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            );
-          })()}
-
-          <Button
-            variant="contained"
-            disabled={selectorSelectedTaskIds.length === 0}
-            onClick={async () => {
-              if (!selectorDay || !selectorChamber) return;
-              try {
-                const chambers = getChambersWithTasksForDay(selectorDay.day_number);
-                const activeChamber = chambers.find(c => c.chamberKey === selectorChamber);
-                const tasksToClone = activeChamber?.tasks.filter(t => selectorSelectedTaskIds.includes(t.id)) || [];
-
-                const clonedTasks: any[] = [];
-                for (let i = 0; i < tasksToClone.length; i++) {
-                  const taskToClone = tasksToClone[i];
-                  const newTask = await saveTaskMutation.mutateAsync({
-                    id: taskToClone.id, // Update the existing task row in DB instead of creating a new one
-                    lesson_id: selectorDay.id,
-                    title: taskToClone.title,
-                    type: taskToClone.type,
-                    description: taskToClone.description || '',
-                    content: {
-                      ...(taskToClone.content || {}),
-                      routine_window: selectorWindow
-                    },
-                    order_index: (selectorDay.tasks?.length || 0) + i + 1
-                  });
-                  clonedTasks.push(newTask);
-                }
-
-                // Update localModules state
-                const updatedModules = localModules.map(m => {
-                  let lessons = m.lessons || [];
-                  
-                  // 1. Remove task from the chamber lesson tasks list
-                  lessons = lessons.map((l: any) => {
-                    if (l.tasks?.some((t: any) => selectorSelectedTaskIds.includes(t.id))) {
-                      return {
-                        ...l,
-                        tasks: l.tasks.filter((t: any) => !selectorSelectedTaskIds.includes(t.id))
-                      };
-                    }
-                    return l;
-                  });
-
-                  // 2. Add task to the main day protocol lesson tasks list
-                  if (m.id === selectorDay.moduleId) {
-                    lessons = lessons.map((l: any) => {
-                      if (l.id === selectorDay.id) {
-                        return {
-                          ...l,
-                          tasks: [...(l.tasks || []), ...clonedTasks]
-                        };
-                      }
-                      return l;
-                    });
-                  }
-
-                  return { ...m, lessons };
-                });
-
-                setLocalModules(updatedModules);
-                await syncLessonRoutine(selectorDay.id, updatedModules);
-                setNotification({ open: true, message: `Moved ${clonedTasks.length} task(s)!`, severity: 'success' });
-                
-                // Reset
-                setTaskSelectorAnchor(null);
-                setSelectorDay(null);
-                setSelectorWindow('');
-                setSelectorChamber('');
-                setSelectorSelectedTaskIds([]);
-              } catch (err) {
-                console.error(err);
-                setNotification({ open: true, message: 'Failed to add selected tasks.', severity: 'error' });
-              }
-            }}
-            sx={{ backgroundColor: 'var(--emerald-primary)', color: '#0B0B0F', fontWeight: 700, '&:hover': { backgroundColor: 'var(--emerald-light)' } }}
-          >
-            Add Selected Tasks
-          </Button>
-        </Stack>
-      </Popover>
 
       <ProgramImportModal
         open={isImportOpen}

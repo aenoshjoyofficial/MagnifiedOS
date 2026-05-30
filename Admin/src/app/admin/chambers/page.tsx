@@ -66,7 +66,7 @@ const ChamberPage = () => {
   
   // Extract initial selections from URL parameters
   const [selectedProgramId, setSelectedProgramId] = useState<string>(searchParams.get('programId') || '');
-  const [dayNumber, setDayNumber] = useState<number>(Number(searchParams.get('day')) || 1);
+  const dayNumber = 0; // Tasks in chambers are day-independent (Pool)
 
   // Task creation form state
   const [taskTitle, setTaskTitle] = useState('');
@@ -143,9 +143,8 @@ const ChamberPage = () => {
   useEffect(() => {
     const params: Record<string, string> = {};
     if (selectedProgramId) params.programId = selectedProgramId;
-    if (dayNumber) params.day = String(dayNumber);
     setSearchParams(params);
-  }, [selectedProgramId, dayNumber, setSearchParams]);
+  }, [selectedProgramId, setSearchParams]);
 
   // Chamber display info
   const chamberInfo = CHAMBERS_INFO[chamberId as keyof typeof CHAMBERS_INFO] || { name: chamberId.toUpperCase().replace('-', ' ') };
@@ -178,12 +177,12 @@ const ChamberPage = () => {
     try {
       await saveLessonMutation.mutateAsync({
         module_id: matchedModule.id,
-        title: `Day Protocol ${dayNumber}`,
-        day_number: dayNumber,
-        unlock_day: dayNumber
+        title: `Chamber Pool`,
+        day_number: 0,
+        unlock_day: 0
       });
     } catch (err) {
-      console.error('Failed to initialize day lesson:', err);
+      console.error('Failed to initialize pool lesson:', err);
     }
   };
 
@@ -203,9 +202,9 @@ const ChamberPage = () => {
       try {
         const newLesson = await saveLessonMutation.mutateAsync({
           module_id: matchedModule.id,
-          title: `Day Protocol ${dayNumber}`,
-          day_number: dayNumber,
-          unlock_day: dayNumber
+          title: `Chamber Pool`,
+          day_number: 0,
+          unlock_day: 0
         });
         targetLessonId = newLesson.id;
       } catch (err) {
@@ -420,7 +419,7 @@ const ChamberPage = () => {
                       disabled={saveTaskMutation.isPending || saveLessonMutation.isPending}
                       sx={{ backgroundColor: 'var(--emerald-mid)', color: 'var(--emerald-primary)', fontWeight: 700 }}
                     >
-                      {saveTaskMutation.isPending || saveLessonMutation.isPending ? 'Saving...' : 'Add Task to Day'}
+                      {saveTaskMutation.isPending || saveLessonMutation.isPending ? 'Saving...' : 'Add Task to Chamber'}
                     </Button>
                   </Box>
                 </Stack>
@@ -430,13 +429,13 @@ const ChamberPage = () => {
             {/* Tasks List */}
             <Paper sx={{ p: 3, border: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: 'rgba(255, 255, 255, 0.01)' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 2 }}>
-                Current Tasks for Day {dayNumber}
+                Chamber Tasks Pool
               </Typography>
               <Divider sx={{ mb: 2 }} />
 
               {!matchedLesson || !matchedLesson.tasks || matchedLesson.tasks.length === 0 ? (
                 <Typography variant="body2" sx={{ color: '#666', py: 2, textAlign: 'center' }}>
-                  No tasks added for this day yet. Use the form above to add a task.
+                  No tasks added to this chamber yet. Use the form above to add a task.
                 </Typography>
               ) : (
                 <Stack spacing={2}>
