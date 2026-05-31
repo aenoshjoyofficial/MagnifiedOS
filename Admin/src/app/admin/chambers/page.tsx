@@ -78,19 +78,21 @@ const ChamberPage = () => {
 
   // Task creation form state
   const [taskTitle, setTaskTitle] = useState('');
-  const [taskType, setTaskType] = useState<'text' | 'audio' | 'video' | 'image' | 'pdf'>('text');
+  const [taskType, setTaskType] = useState<'text' | 'audio' | 'video' | 'image' | 'pdf' | 'checklist'>('text');
   const [taskDescription, setTaskDescription] = useState('');
   const [contentUrl, setContentUrl] = useState('');
+  const [checklistSteps, setChecklistSteps] = useState('');
 
   // Task editing form state
   const [editingTask, setEditingTask] = useState<any | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editTitle, setEditTitle] = useState('');
-  const [editType, setEditType] = useState<'text' | 'audio' | 'video' | 'image' | 'pdf'>('text');
+  const [editType, setEditType] = useState<'text' | 'audio' | 'video' | 'image' | 'pdf' | 'checklist'>('text');
   const [editDescription, setEditDescription] = useState('');
   const [editContentUrl, setEditContentUrl] = useState('');
   const [editResourceUrl, setEditResourceUrl] = useState('');
   const [editDuration, setEditDuration] = useState('');
+  const [editChecklistSteps, setEditChecklistSteps] = useState('');
   const [editIsUploading, setEditIsUploading] = useState(false);
 
   // Placeholders mapping based on task type
@@ -119,6 +121,11 @@ const ChamberPage = () => {
       title: "e.g. Weekly Nutrition Blueprint",
       url: "e.g. https://example.com/guides/nutrition.pdf",
       description: "e.g. Refer to the attached guide for detailed food recipes..."
+    },
+    checklist: {
+      title: "e.g. Daily Habits Checklist",
+      url: "e.g. https://example.com/checklist-guide (Optional)",
+      description: "e.g. Mark all items as complete to finish today's checklist"
     }
   };
 
@@ -302,6 +309,10 @@ const ChamberPage = () => {
       const urlValue = contentUrl.trim();
       const isYoutubeOrVimeo = urlValue.includes('youtube.com') || urlValue.includes('youtu.be') || urlValue.includes('vimeo.com');
 
+      const stepsArray = taskType === 'checklist' 
+        ? checklistSteps.split('\n').map(s => s.trim()).filter(Boolean)
+        : [];
+
       await saveTaskMutation.mutateAsync({
         lesson_id: targetLessonId,
         title: taskTitle.trim(),
@@ -310,7 +321,8 @@ const ChamberPage = () => {
         content: { 
           url: urlValue,
           resource_url: isYoutubeOrVimeo ? urlValue : '',
-          format: taskType 
+          format: taskType,
+          steps: stepsArray
         },
         order_index: (matchedLesson?.tasks?.length || 0) + 1
       });
@@ -319,6 +331,7 @@ const ChamberPage = () => {
       setTaskTitle('');
       setTaskDescription('');
       setContentUrl('');
+      setChecklistSteps('');
     } catch (err: any) {
       console.error('Failed to save task:', err);
       const errMsg = err?.message || err?.error_description || String(err);
@@ -373,6 +386,11 @@ const ChamberPage = () => {
     setEditResourceUrl(task.content?.resource_url || '');
     setEditDuration(task.content?.duration || '');
     setEditIsUploading(false);
+    
+    // Set edit checklist steps if task contains steps
+    const stepsArray = task.content?.steps || [];
+    setEditChecklistSteps(stepsArray.join('\n'));
+
     setIsEditDialogOpen(true);
   };
 
@@ -419,13 +437,18 @@ const ChamberPage = () => {
       const isYoutubeOrVimeo = urlVal.includes('youtube.com') || urlVal.includes('youtu.be') || urlVal.includes('vimeo.com') || resVal.includes('youtube.com') || resVal.includes('youtu.be') || resVal.includes('vimeo.com');
       const dbType = (editType === 'image' || editType === 'pdf') ? 'text' : editType;
 
+      const stepsArray = editType === 'checklist' 
+        ? editChecklistSteps.split('\n').map(s => s.trim()).filter(Boolean)
+        : [];
+
       const updatedContent = {
         ...editingTask.content,
         url: urlVal || (isYoutubeOrVimeo ? resVal : ''),
         text: editDescription.trim(),
         format: editType,
         resource_url: resVal || (isYoutubeOrVimeo ? urlVal : ''),
-        duration: editDuration.trim()
+        duration: editDuration.trim(),
+        steps: stepsArray
       };
 
       // 1. Get sibling tasks inside the same module that share the pre-edited title
@@ -660,8 +683,23 @@ const ChamberPage = () => {
                       <MenuItem value="video">Video Routine</MenuItem>
                       <MenuItem value="image">Image Protocol</MenuItem>
                       <MenuItem value="pdf">PDF Document</MenuItem>
+                      <MenuItem value="checklist">Checklist</MenuItem>
                     </Select>
                   </FormControl>
+
+                  {taskType === 'checklist' && (
+                    <TextField
+                      fullWidth
+                      required
+                      size="small"
+                      label="Checklist Items (One item per line)"
+                      value={checklistSteps}
+                      onChange={(e) => setChecklistSteps(e.target.value)}
+                      multiline
+                      rows={4}
+                      placeholder="e.g.&#10;Drink 500ml water&#10;Perform joint mobility routine&#10;10 minutes breathwork"
+                    />
+                  )}
 
                   <TextField
                     fullWidth
@@ -684,7 +722,7 @@ const ChamberPage = () => {
                     disabled={isUploading}
                   />
 
-                  {taskType !== 'text' && (
+                  {taskType !== 'text' && taskType !== 'checklist' && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                       <Button
                         variant="outlined"
@@ -895,6 +933,7 @@ const ChamberPage = () => {
                   <MenuItem value="video">Video Routine</MenuItem>
                   <MenuItem value="image">Image Protocol</MenuItem>
                   <MenuItem value="pdf">PDF Document</MenuItem>
+                  <MenuItem value="checklist">Checklist</MenuItem>
                 </Select>
               </FormControl>
 
@@ -909,6 +948,31 @@ const ChamberPage = () => {
                   rows={6}
                   placeholder={placeholders.text.description}
                 />
+              ) : editType === 'checklist' ? (
+                <>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Description / Instruction (Optional)"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    multiline
+                    rows={2}
+                    placeholder={placeholders.checklist.description}
+                  />
+
+                  <TextField
+                    fullWidth
+                    required
+                    size="small"
+                    label="Checklist Items (One item per line)"
+                    value={editChecklistSteps}
+                    onChange={(e) => setEditChecklistSteps(e.target.value)}
+                    multiline
+                    rows={6}
+                    placeholder="e.g.&#10;Drink 500ml water&#10;Perform joint mobility routine&#10;10 minutes breathwork"
+                  />
+                </>
               ) : (
                 <>
                   <TextField

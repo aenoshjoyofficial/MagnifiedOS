@@ -56,12 +56,13 @@ export const mapTaskTypeToWindow = (type: string): string => {
 };
 
 // Maps Excel task types to ChamberStep types allowed in local storage
-export const mapTaskTypeToStepType = (type: string): 'text' | 'pdf' | 'audio' | 'video' | 'image' => {
+export const mapTaskTypeToStepType = (type: string): 'text' | 'pdf' | 'audio' | 'video' | 'image' | 'checklist' => {
   const t = type.toLowerCase().trim();
   if (t === 'audio') return 'audio';
   if (t === 'video') return 'video';
   if (t === 'pdf') return 'pdf';
   if (t === 'image') return 'image';
+  if (t === 'checklist') return 'checklist';
   return 'text';
 };
 
