@@ -229,7 +229,7 @@ export const useNotifications = (userId: string) => {
         return [
           {
             id: 'mock-1',
-            title: 'Welcome to Shribodhi Magnified',
+            title: 'Welcome to Shribodhi Existence',
             message: 'Your portal is set up. Access neural protocols, schedules, and profile settings in your dashboard.',
             type: 'system',
             is_read: false,
