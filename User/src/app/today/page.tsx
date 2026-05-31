@@ -633,7 +633,7 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
       case 'text':
         return <TextTask content={task.content?.text || task.description} onComplete={onComplete} />;
       case 'checklist':
-        return <ChecklistTask steps={task.content?.steps || []} onComplete={onComplete} />;
+        return null;
       default:
         return <Button onClick={onComplete}>Complete Task</Button>;
     }
@@ -720,6 +720,16 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
           )}
         </Box>
       </Box>
+
+      {/* Checklist items rendered directly inside the card under the title/header row */}
+      {task.type === 'checklist' && task.content?.steps && task.content.steps.length > 0 && (
+        <Box 
+          sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}
+          onClick={(e) => e.stopPropagation()} // Prevent card collapse when interacting with the checklist
+        >
+          <ChecklistTask steps={task.content.steps} onComplete={onComplete} disabled={isLocked} />
+        </Box>
+      )}
 
       {isExpanded && !isLocked && (
         <Box 
