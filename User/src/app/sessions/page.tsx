@@ -118,7 +118,7 @@ const Sessions = () => {
             Collective Sessions
           </Typography>
           <Typography variant="body1" sx={{ color: '#B0B0B0', fontSize: { xs: '0.9rem', sm: '1rem' } }}>
-            Synchronous expansion with the Existence community.
+            Synchronous expansion with the Magnified community.
           </Typography>
         </Box>
       </Box>

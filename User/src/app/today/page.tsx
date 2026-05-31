@@ -80,16 +80,22 @@ const TodayPractice = () => {
   const program = enrollment?.programs;
   const startedAt = enrollment ? new Date(enrollment.started_at) : new Date();
 
-  // Calculate days since start using LOCAL calendar dates, not raw UTC milliseconds.
-  // Zeroing out the time component on both dates ensures users in non-UTC timezones
-  // (e.g. IST UTC+5:30) don't see Day 2 on what is locally still their first day.
+  // Calculate days since start using America/New_York (Eastern Time) calendar dates.
+  // This ensures all users see the exact same day content synchronized to New York time (EST/EDT).
   const daysSinceStart = (() => {
     if (!enrollment) return 1;
-    const startDay = new Date(startedAt);
-    startDay.setHours(0, 0, 0, 0); // Strip time — keep only local calendar date
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);    // Strip time — keep only local calendar date
-    return Math.max(1, Math.floor((today.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    
+    const getNYDate = (d: Date) => {
+      const estStr = d.toLocaleString("en-US", { timeZone: "America/New_York" });
+      const nyDate = new Date(estStr);
+      nyDate.setHours(0, 0, 0, 0);
+      return nyDate;
+    };
+
+    const startNY = getNYDate(startedAt);
+    const todayNY = getNYDate(new Date());
+    
+    return Math.max(1, Math.floor((todayNY.getTime() - startNY.getTime()) / (1000 * 60 * 60 * 24)) + 1);
   })();
   const viewedDay = dayParam ? parseInt(dayParam, 10) : daysSinceStart;
 

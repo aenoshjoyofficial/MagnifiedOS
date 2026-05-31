@@ -60,27 +60,36 @@ const Dashboard = () => {
   const calculateStreak = React.useCallback(() => {
     if (!completions || completions.length === 0) return 0;
 
-    // Collect unique calendar dates (YYYY-MM-DD) from completions
+    const formatNYDate = (d: Date) => {
+      const estStr = d.toLocaleDateString("en-US", { timeZone: "America/New_York" });
+      const [m, day, y] = estStr.split('/');
+      return `${y}-${m.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    };
+
+    const getNYMidnight = (d: Date) => {
+      const estStr = d.toLocaleString("en-US", { timeZone: "America/New_York" });
+      const nyDate = new Date(estStr);
+      nyDate.setHours(0, 0, 0, 0);
+      return nyDate;
+    };
+
+    // Collect unique calendar dates (YYYY-MM-DD) from completions in Eastern Time
     const dates = [...new Set(
       completions.map((c: any) => {
-        const d = new Date(c.completed_at);
-        d.setHours(0, 0, 0, 0);
-        return d.toISOString().split('T')[0];
+        return formatNYDate(new Date(c.completed_at));
       })
     )] as string[];
     dates.sort().reverse(); // Most recent first
 
-    // Build today and yesterday as YYYY-MM-DD strings
-    const todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0);
-    const today = todayDate.toISOString().split('T')[0];
+    // Build today and yesterday with time zeroed out in Eastern Time
+    const todayNYDate = getNYMidnight(new Date());
+    const today = formatNYDate(todayNYDate);
 
-    const yesterdayDate = new Date();
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-    yesterdayDate.setHours(0, 0, 0, 0);
-    const yesterday = yesterdayDate.toISOString().split('T')[0];
+    const yesterdayNYDate = new Date(todayNYDate);
+    yesterdayNYDate.setDate(todayNYDate.getDate() - 1);
+    const yesterday = formatNYDate(yesterdayNYDate);
 
-    // Streak is broken if no completions today or yesterday
+    // Streak is broken if no completions today or yesterday in Eastern Time
     if (dates[0] !== today && dates[0] !== yesterday) return 0;
 
     // Count consecutive days going backward from the most recent completion
@@ -151,7 +160,18 @@ const Dashboard = () => {
 
   // Current Day: Based on latest completed task's lesson day or days since start
   const startedAt = enrollment?.started_at ? new Date(enrollment.started_at) : new Date();
-  const calendarDays = Math.max(1, Math.floor((new Date().getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  const calendarDays = (() => {
+    if (!enrollment) return 1;
+    const getNYDate = (d: Date) => {
+      const estStr = d.toLocaleString("en-US", { timeZone: "America/New_York" });
+      const nyDate = new Date(estStr);
+      nyDate.setHours(0, 0, 0, 0);
+      return nyDate;
+    };
+    const startNY = getNYDate(startedAt);
+    const todayNY = getNYDate(new Date());
+    return Math.max(1, Math.floor((todayNY.getTime() - startNY.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  })();
   
   // We'll use calendar days as the "current day" but capped at total days
   const currentDay = Math.min(calendarDays, totalDays);

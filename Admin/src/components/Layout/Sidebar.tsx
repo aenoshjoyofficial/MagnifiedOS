@@ -85,7 +85,7 @@ const Sidebar = () => {
         {(isSidebarOpen || isMobile) && (
           <Link to="/admin" style={{ textDecoration: 'none' }}>
             <Typography variant="h6" sx={{ fontWeight: 800, color: '#D4AF37', letterSpacing: -0.5 }}>
-              EXISTENCE ADMIN
+              MAGNIFIED ADMIN
             </Typography>
           </Link>
         )}
