@@ -24,7 +24,7 @@ interface Step {
 
 const TOUR_STEPS: Step[] = [
   {
-    title: "Welcome to Shribodhi",
+    title: "Welcome to Magnified Existence",
     description: "Your gateway to inner alignment, high performance, and neural expansion. Let's take a quick 1-minute journey to introduce you to your new Magnified OS workspace."
   },
   {
