@@ -42,6 +42,11 @@ const VideoTask = ({ url, onComplete }: VideoTaskProps) => {
   };
 
 
+  const isRawVideo = url.toLowerCase().endsWith('.mp4') || 
+                     url.toLowerCase().includes('.mp4?') || 
+                     url.toLowerCase().endsWith('.webm') || 
+                     url.toLowerCase().endsWith('.ogg');
+
   return (
     <Box>
       <Box 
@@ -55,19 +60,34 @@ const VideoTask = ({ url, onComplete }: VideoTaskProps) => {
           mb: 3
         }}
       >
-        <iframe
-          src={getEmbedUrl(url)}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            border: 0
-          }}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
+        {isRawVideo ? (
+          <video
+            src={url}
+            controls
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              border: 0
+            }}
+          />
+        ) : (
+          <iframe
+            src={getEmbedUrl(url)}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              border: 0
+            }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        )}
       </Box>
 
       <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
