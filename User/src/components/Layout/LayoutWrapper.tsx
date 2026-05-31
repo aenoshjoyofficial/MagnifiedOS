@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import { useUIStore } from '@/store/useStore';
 import { useLocation } from 'react-router-dom';
+import { DashboardTour } from '../Onboarding/DashboardTour';
 
 const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password'];
 
@@ -30,6 +31,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#0B0B0F' }}>
+      <DashboardTour />
       <Sidebar />
       <Box
         component="main"

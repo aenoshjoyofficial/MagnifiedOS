@@ -26,6 +26,7 @@ interface AuthState {
   initialize: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ data: any; error: any }>;
   signOut: () => Promise<void>;
+  setProfileField: (field: string, value: any) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -33,6 +34,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   profile: null,
   loading: true,
   initialized: false,
+
+  setProfileField: (field, value) => {
+    const currentProfile = get().profile;
+    if (currentProfile) {
+      set({ profile: { ...currentProfile, [field]: value } });
+    }
+  },
 
   initialize: async () => {
     if (get().initialized) return;

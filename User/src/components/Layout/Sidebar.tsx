@@ -104,6 +104,7 @@ const Sidebar = () => {
             <ListItem key={item.path} disablePadding sx={{ display: 'block', mb: 0.5 }}>
               <Tooltip title={!isSidebarOpen ? item.label : ''} placement="right">
                 <ListItemButton
+                  id={`tour-${item.label.toLowerCase().replace("'", "").replace(" ", "-")}`}
                   component={Link}
                   to={item.path}
                   sx={{
