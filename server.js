@@ -55,7 +55,9 @@ app.use(
         frameSrc: [
           "'self'",
           "https://www.youtube.com",
-          "https://*.youtube.com"
+          "https://*.youtube.com",
+          "https://player.vimeo.com",  // Vimeo embed player
+          "https://vimeo.com",         // Vimeo direct links
         ],
         objectSrc: ["'none'"],
         upgradeInsecureRequests: [],

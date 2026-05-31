@@ -82,7 +82,7 @@ const MemberResetPassword = () => {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        background: 'radial-gradient(circle at center, #1a1a2e 0%, #0B0B0F 100%)',
+        background: 'radial-gradient(circle at center, #041C16 0%, #040D0C 100%)',
         p: 3
       }}
     >
@@ -91,36 +91,37 @@ const MemberResetPassword = () => {
           p: 5, 
           width: '100%', 
           maxWidth: 420, 
-          borderRadius: 4,
-          backgroundColor: 'rgba(255, 255, 255, 0.02)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(212, 175, 55, 0.1)',
+          borderRadius: '24px',
+          backgroundColor: 'rgba(7, 24, 21, 0.45)',
+          backdropFilter: 'blur(24px)',
+          border: '1px solid rgba(0, 212, 163, 0.15)',
+          boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)',
         }}
       >
         <Box sx={{ textAlign: 'center', mb: 5 }}>
           <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
             <ShieldCheck size={40} color="#D4AF37" />
           </Box>
-          <Typography variant="h4" sx={{ fontWeight: 900, color: '#D4AF37', letterSpacing: -1, mb: 1 }}>
+          <Typography variant="h4" sx={{ fontWeight: 900, color: '#D4AF37', letterSpacing: -1, mb: 1, fontFamily: '"Playfair Display", serif' }}>
             NEW PASSWORD
           </Typography>
-          <Typography variant="body2" sx={{ color: '#B0B0B0' }}>
+          <Typography variant="body2" sx={{ color: 'var(--text-secondary)' }}>
             Set your new secure access credentials.
           </Typography>
         </Box>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 3, backgroundColor: 'rgba(211, 47, 47, 0.1)', color: '#ff5252' }}>
+          <Alert severity="error" sx={{ mb: 3, backgroundColor: 'rgba(211, 47, 47, 0.1)', color: '#ff5252', borderRadius: '12px' }}>
             {error}
           </Alert>
         )}
 
         {success ? (
           <Box sx={{ textAlign: 'center' }}>
-            <Alert severity="success" sx={{ mb: 4, backgroundColor: 'rgba(46, 125, 50, 0.1)', color: '#4caf50' }}>
+            <Alert severity="success" sx={{ mb: 4, backgroundColor: 'rgba(212, 175, 55, 0.1)', color: '#D4AF37', borderRadius: '12px', fontWeight: 700 }}>
               Security updated. Entering dashboard...
             </Alert>
-            <CircularProgress size={24} sx={{ color: '#D4AF37' }} />
+            <CircularProgress size={24} sx={{ color: '#00D4A3' }} />
           </Box>
         ) : (
           <form onSubmit={handleUpdatePassword}>
@@ -169,10 +170,14 @@ const MemberResetPassword = () => {
                 disabled={loading}
                 sx={{ 
                   py: 1.5,
-                  backgroundColor: '#D4AF37', 
-                  color: '#0B0B0F',
+                  background: 'linear-gradient(135deg, #00D4A3 0%, #0B3B32 100%)',
+                  color: '#040D0C',
                   fontWeight: 800,
-                  '&:hover': { backgroundColor: '#B8962D' },
+                  borderRadius: '30px',
+                  boxShadow: '0 4px 15px rgba(0, 212, 163, 0.25)',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #39E7C0 0%, #00D4A3 100%)',
+                  },
                 }}
               >
                 {loading ? <CircularProgress size={24} color="inherit" /> : 'CONFIRM UPDATE'}

@@ -98,10 +98,28 @@ const Sessions = () => {
 
   return (
     <Box>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+      <Box sx={{ 
+        mb: 4, 
+        display: 'flex', 
+        flexDirection: { xs: 'column', sm: 'row' }, 
+        alignItems: { xs: 'flex-start', sm: 'flex-end' },
+        gap: 2 
+      }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>Collective Sessions</Typography>
-          <Typography variant="body1" sx={{ color: '#B0B0B0' }}>Synchronous expansion with the Magnified community.</Typography>
+          <Typography 
+            variant="h4" 
+            sx={{ 
+              fontWeight: 800, 
+              mb: 0.5,
+              fontSize: { xs: '1.75rem', sm: '2.25rem', md: '2.5rem' },
+              fontFamily: '"Playfair Display", serif'
+            }}
+          >
+            Collective Sessions
+          </Typography>
+          <Typography variant="body1" sx={{ color: '#B0B0B0', fontSize: { xs: '0.9rem', sm: '1rem' } }}>
+            Synchronous expansion with the Magnified community.
+          </Typography>
         </Box>
       </Box>
 
@@ -114,7 +132,7 @@ const Sessions = () => {
           ) : (
             <Stack spacing={3}>
               {upcomingSessions.map((session: any) => (
-                <Paper key={session.id} sx={{ p: 3, backgroundColor: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.05)', transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-4px)', borderColor: 'rgba(212, 175, 55, 0.2)' } }}>
+                <Paper key={session.id} sx={{ p: { xs: 2.5, sm: 3.5 }, backgroundColor: 'rgba(7, 24, 21, 0.35)', border: '1px solid rgba(0, 212, 163, 0.15)', borderRadius: '24px', backdropFilter: 'blur(16px)', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', '&:hover': { transform: 'translateY(-4px)', borderColor: 'rgba(0, 212, 163, 0.45)', boxShadow: '0 8px 30px rgba(0, 212, 163, 0.15)' } }}>
                   <Grid container spacing={3} sx={{ alignItems: 'center' }}>
                     <Grid size={{ xs: 12, sm: 'auto' }}>
                       <Avatar 
@@ -153,14 +171,27 @@ const Sessions = () => {
                     <Grid size={{ xs: 12, sm: 'auto' }}>
                       <Button 
                         variant={waitlisted.includes(session.id) ? "outlined" : "contained"}
-                        color={waitlisted.includes(session.id) ? "success" : "primary"}
                         onClick={() => handleJoinWaitlist(session.id)}
-                        startIcon={waitlisted.includes(session.id) ? <CheckCircle2 size={18} /> : null}
+                        startIcon={waitlisted.includes(session.id) ? <CheckCircle2 size={16} /> : null}
                         sx={{ 
-                          backgroundColor: waitlisted.includes(session.id) ? 'transparent' : '#D4AF37', 
-                          color: waitlisted.includes(session.id) ? '#4CAF50' : '#0B0B0F',
-                          fontWeight: 700,
-                          '&:hover': { backgroundColor: waitlisted.includes(session.id) ? 'transparent' : '#B8962D' }
+                          width: { xs: '100%', sm: 'auto' },
+                          borderColor: waitlisted.includes(session.id) ? '#D4AF37' : 'transparent',
+                          color: waitlisted.includes(session.id) ? '#D4AF37' : '#040D0C',
+                          fontWeight: 800,
+                          borderRadius: '20px',
+                          textTransform: 'none',
+                          background: waitlisted.includes(session.id) ? 'transparent' : 'linear-gradient(135deg, #00D4A3 0%, #0B3B32 100%)',
+                          boxShadow: waitlisted.includes(session.id) ? 'none' : '0 4px 12px rgba(0, 212, 163, 0.2)',
+                          '&:hover': { 
+                            borderColor: waitlisted.includes(session.id) ? '#F0D27A' : 'transparent',
+                            background: waitlisted.includes(session.id) ? 'rgba(212, 175, 55, 0.05)' : 'linear-gradient(135deg, #39E7C0 0%, #00D4A3 100%)',
+                            boxShadow: waitlisted.includes(session.id) ? 'none' : '0 6px 16px rgba(0, 212, 163, 0.4)',
+                            transform: 'translateY(-1px)'
+                          },
+                          '&.Mui-disabled': {
+                            color: '#D4AF37',
+                            borderColor: '#D4AF37',
+                          }
                         }}
                       >
                         {waitlisted.includes(session.id) ? 'Waitlisted' : 'Join Session'}
@@ -177,9 +208,9 @@ const Sessions = () => {
             </Stack>
           )}
         </Grid>
-
+ 
         <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ p: 4, height: '100%', background: 'rgba(212, 175, 55, 0.02)', border: '1px solid rgba(212, 175, 55, 0.1)' }}>
+          <Paper sx={{ p: { xs: 3, sm: 4.5 }, height: '100%', backgroundColor: 'rgba(7, 24, 21, 0.35)', border: '1px solid rgba(212, 175, 55, 0.25)', borderRadius: '24px', backdropFilter: 'blur(20px)', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.35)', background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.04) 0%, transparent 100%)' }}>
             <Typography variant="h6" sx={{ fontWeight: 800, mb: 3 }}>One-on-One Mentorship</Typography>
             <Typography variant="body2" sx={{ color: '#B0B0B0', mb: 4 }}>
               Accelerate your evolution with a private session. Our elite mentors specialize in neuro-architecting and high-performance states.
@@ -188,14 +219,13 @@ const Sessions = () => {
               <Button 
                 fullWidth 
                 variant="contained" 
+                color="primary"
                 startIcon={<CalendarDays size={18} />}
                 onClick={() => setCalendarOpen(true)}
                 sx={{ 
-                  py: 1.5, 
-                  backgroundColor: '#D4AF37', 
-                  color: '#0B0B0F',
-                  fontWeight: 700,
-                  '&:hover': { backgroundColor: '#B8962D' }
+                  py: 1.75, 
+                  fontWeight: 800,
+                  borderRadius: '30px'
                 }}
               >
                 View Availability
@@ -212,11 +242,11 @@ const Sessions = () => {
         onClose={() => setBookingOpen(false)}
         slotProps={{ 
           paper: { 
-            sx: { backgroundColor: '#121217', border: '1px solid rgba(212, 175, 55, 0.1)', minWidth: { xs: '90%', sm: 400 } } 
+            sx: { backgroundColor: '#040D0C', border: '1px solid rgba(0, 212, 163, 0.2)', borderRadius: '24px', minWidth: { xs: '90%', sm: 400 }, boxShadow: '0 12px 40px rgba(0, 0, 0, 0.6)' } 
           } 
         }}
       >
-        <DialogTitle sx={{ fontWeight: 800, color: '#D4AF37' }}>Schedule Assessment</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800, color: '#D4AF37', fontFamily: '"Playfair Display", serif' }}>Schedule Assessment</DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ mt: 2 }}>
             <TextField select fullWidth label="Select Mentor" defaultValue="aris" variant="filled">
@@ -235,11 +265,20 @@ const Sessions = () => {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setBookingOpen(false)} sx={{ color: '#B0B0B0' }}>Cancel</Button>
+          <Button onClick={() => setBookingOpen(false)} sx={{ color: '#B0B0B0', fontWeight: 700 }}>Cancel</Button>
           <Button 
             variant="contained" 
             onClick={handleScheduleSubmit}
-            sx={{ backgroundColor: '#D4AF37', color: '#0B0B0F', fontWeight: 700 }}
+            sx={{ 
+              background: 'linear-gradient(135deg, #00D4A3 0%, #0B3B32 100%)',
+              color: '#040D0C',
+              fontWeight: 800,
+              borderRadius: '30px',
+              px: 3,
+              '&:hover': {
+                background: 'linear-gradient(135deg, #39E7C0 0%, #00D4A3 100%)',
+              }
+            }}
           >
             Confirm Booking
           </Button>
@@ -254,7 +293,7 @@ const Sessions = () => {
         maxWidth="md"
         slotProps={{ 
           paper: { 
-            sx: { backgroundColor: '#121217', border: '1px solid rgba(212, 175, 55, 0.1)' } 
+            sx: { backgroundColor: '#040D0C', border: '1px solid rgba(0, 212, 163, 0.2)', borderRadius: '24px', boxShadow: '0 12px 40px rgba(0, 0, 0, 0.6)' } 
           } 
         }}
       >
@@ -262,21 +301,21 @@ const Sessions = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <CalendarDays size={24} color="#D4AF37" />
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800, fontFamily: '"Playfair Display", serif' }}>
                 {bookingStep === 1 ? 'Select Date - May 2026' : `Select Time - May ${selectedDate}, 2026`}
               </Typography>
             </Box>
             {bookingStep === 2 && (
-              <Button size="small" onClick={() => setBookingStep(1)} sx={{ color: '#D4AF37' }}>Back to Calendar</Button>
+              <Button size="small" onClick={() => setBookingStep(1)} sx={{ color: '#D4AF37', fontWeight: 700 }}>Back to Calendar</Button>
             )}
           </Box>
         </DialogTitle>
         <DialogContent sx={{ p: 0, minHeight: 400 }}>
           {bookingStep === 1 ? (
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', backgroundColor: 'rgba(255, 255, 255, 0.02)' }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', backgroundColor: 'rgba(255, 255, 255, 0.01)' }}>
               {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => (
                 <Box key={day} sx={{ p: { xs: 0.5, sm: 1.5 }, textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#666', fontSize: { xs: '0.65rem', sm: '0.75rem' } }}>{day}</Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#888', fontSize: { xs: '0.65rem', sm: '0.75rem' } }}>{day}</Typography>
                 </Box>
               ))}
               {[...Array(31)].map((_, i) => {
@@ -319,13 +358,13 @@ const Sessions = () => {
                           <Tooltip key={s.id} title={`${s.session_type}: ${s.title}`}>
                             <Box sx={{ width: '100%' }}>
                               <Box sx={{ display: { xs: 'flex', sm: 'none' }, justifyContent: 'center', mt: 0.5 }}>
-                                <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#f44336' }} />
+                                <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#ef5350' }} />
                               </Box>
                               <Box sx={{ display: { xs: 'none', sm: 'block' }, width: '100%' }}>
                                 <Chip 
                                   label="BUSY" 
                                   size="small" 
-                                  sx={{ height: 16, fontSize: '0.5rem', backgroundColor: 'rgba(244, 67, 54, 0.1)', color: '#f44336', fontWeight: 900, border: '1px solid rgba(244, 67, 54, 0.2)' }} 
+                                  sx={{ height: 16, fontSize: '0.5rem', backgroundColor: 'rgba(239, 83, 80, 0.1)', color: '#ef5350', fontWeight: 900, border: '1px solid rgba(239, 83, 80, 0.2)' }} 
                                 />
                               </Box>
                             </Box>
@@ -357,10 +396,15 @@ const Sessions = () => {
                         onClick={() => setSelectedTime(time)}
                         sx={{ 
                           py: 2, 
+                          borderRadius: '12px',
                           borderColor: isSlotBusy ? 'rgba(255, 255, 255, 0.05)' : (selectedTime === time ? '#D4AF37' : 'rgba(255, 255, 255, 0.1)'),
                           backgroundColor: selectedTime === time ? '#D4AF37' : 'transparent',
                           color: isSlotBusy ? '#333' : (selectedTime === time ? '#0B0B0F' : '#EAEAEA'),
-                          textDecoration: isSlotBusy ? 'line-through' : 'none'
+                          textDecoration: isSlotBusy ? 'line-through' : 'none',
+                          '&:hover': {
+                            borderColor: isSlotBusy ? 'rgba(255, 255, 255, 0.05)' : '#D4AF37',
+                            backgroundColor: selectedTime === time ? '#D4AF37' : 'rgba(212, 175, 55, 0.05)'
+                          }
                         }}
                       >
                         {time} {isSlotBusy && '(Busy)'}
@@ -369,23 +413,32 @@ const Sessions = () => {
                   );
                 })}
               </Grid>
-              <Box sx={{ mt: 6, p: 3, borderRadius: 2, backgroundColor: 'rgba(212, 175, 55, 0.05)', border: '1px solid rgba(212, 175, 55, 0.1)' }}>
-                <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 600 }}>Mentorship Note:</Typography>
-                <Typography variant="caption" sx={{ color: '#B0B0B0' }}>
+              <Box sx={{ mt: 6, p: 3, borderRadius: '16px', backgroundColor: 'rgba(212, 175, 55, 0.04)', border: '1px solid rgba(212, 175, 55, 0.15)' }}>
+                <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 700, mb: 0.5, fontFamily: '"Outfit", sans-serif' }}>Mentorship Note:</Typography>
+                <Typography variant="caption" sx={{ color: '#B0B0B0', lineHeight: 1.5 }}>
                   Private assessments are 45 minutes long and focus on your specific neural architecture progress. Please ensure you have completed the prerequisite tasks for this module.
                 </Typography>
               </Box>
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 2, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
-          <Button onClick={() => { setCalendarOpen(false); setBookingStep(1); }} sx={{ color: '#B0B0B0' }}>Cancel</Button>
+        <DialogActions sx={{ p: 2.5, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+          <Button onClick={() => { setCalendarOpen(false); setBookingStep(1); }} sx={{ color: '#B0B0B0', fontWeight: 700 }}>Cancel</Button>
           {bookingStep === 2 && (
             <Button 
               variant="contained" 
               onClick={handleBookSession}
               disabled={!selectedTime || createBookingMutation.isPending}
-              sx={{ backgroundColor: '#D4AF37', color: '#0B0B0F', fontWeight: 700 }}
+              sx={{ 
+                background: 'linear-gradient(135deg, #00D4A3 0%, #0B3B32 100%)',
+                color: '#040D0C',
+                fontWeight: 800,
+                borderRadius: '30px',
+                px: 3.5,
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #39E7C0 0%, #00D4A3 100%)',
+                }
+              }}
             >
               {createBookingMutation.isPending ? 'Confirming...' : 'Confirm Booking'}
             </Button>
@@ -399,9 +452,10 @@ const Sessions = () => {
           severity={successMsg.includes('❌') ? 'error' : 'success'} 
           sx={{ 
             width: '100%', 
-            backgroundColor: successMsg.includes('❌') ? '#f44336' : '#4CAF50', 
-            color: '#fff',
-            fontWeight: 700
+            backgroundColor: successMsg.includes('❌') ? '#ef5350' : '#D4AF37', 
+            color: '#040D0C',
+            fontWeight: 800,
+            borderRadius: '16px'
           }}
         >
           {successMsg}

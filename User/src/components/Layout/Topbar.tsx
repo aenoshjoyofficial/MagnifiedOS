@@ -90,9 +90,9 @@ const Topbar = () => {
         alignItems: 'center',
         justifyContent: 'space-between',
         px: { xs: 2, md: 4 },
-        backgroundColor: 'rgba(11, 11, 15, 0.8)',
-        backdropFilter: 'blur(10px)',
-        borderBottom: '1px solid rgba(212, 175, 55, 0.1)',
+        backgroundColor: 'rgba(4, 13, 12, 0.85)',
+        backdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(0, 212, 163, 0.15)',
         position: 'sticky',
         top: 0,
         zIndex: 10,
@@ -104,17 +104,17 @@ const Topbar = () => {
             <MenuIcon size={24} />
           </IconButton>
         )}
-        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, color: '#EAEAEA', fontSize: '1.25rem' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#EAEAEA', fontSize: { xs: '1.05rem', sm: '1.25rem' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {getPageTitle()}
           </Typography>
-          <Typography variant="caption" sx={{ color: '#D4AF37', fontWeight: 500, letterSpacing: 0.5 }}>
+          <Typography variant="caption" sx={{ color: '#D4AF37', fontWeight: 500, letterSpacing: 0.5, fontSize: { xs: '0.65rem', sm: '0.75rem' } }}>
             INNER RESET PROGRAM
           </Typography>
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
         <IconButton 
           onClick={(e) => setNotiAnchorEl(e.currentTarget)} 
           sx={{ color: '#B0B0B0', '&:hover': { color: '#D4AF37' } }}
@@ -136,7 +136,7 @@ const Topbar = () => {
             paper: {
               sx: {
                 mt: 1.5,
-                width: 320,
+                width: { xs: 280, sm: 320 },
                 maxHeight: 480,
                 backgroundColor: '#121217',
                 border: '1px solid rgba(212, 175, 55, 0.1)',

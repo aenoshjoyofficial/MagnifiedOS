@@ -208,13 +208,25 @@ const Profile = () => {
   return (
     <Box>
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>Profile & Identity</Typography>
-        <Typography variant="body1" sx={{ color: '#B0B0B0' }}>Manage your personal details and system settings.</Typography>
+        <Typography 
+          variant="h4" 
+          sx={{ 
+            fontWeight: 800, 
+            mb: 0.5,
+            fontSize: { xs: '1.75rem', sm: '2.25rem', md: '2.5rem' },
+            fontFamily: '"Playfair Display", serif'
+          }}
+        >
+          Profile & Identity
+        </Typography>
+        <Typography variant="body1" sx={{ color: '#B0B0B0', fontSize: { xs: '0.9rem', sm: '1rem' } }}>
+          Manage your personal details and system settings.
+        </Typography>
       </Box>
 
       <Grid container spacing={4}>
         <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Paper sx={{ p: { xs: 3, sm: 4 }, textAlign: 'center' }}>
             <Box sx={{ position: 'relative', width: 120, height: 120, mx: 'auto', mb: 3 }}>
               <Avatar 
                 src={profile?.avatar_url} 
@@ -274,7 +286,7 @@ const Profile = () => {
         </Grid>
 
         <Grid size={{ xs: 12, md: 8 }}>
-          <Paper sx={{ p: 4 }}>
+          <Paper sx={{ p: { xs: 3, sm: 4 } }}>
             <Typography variant="h6" sx={{ fontWeight: 800, mb: 3 }}>General Information</Typography>
             <Stack spacing={3}>
               <Box>
@@ -296,10 +308,18 @@ const Profile = () => {
               <Box sx={{ pt: 2 }}>
                 <Button 
                   variant="contained" 
-                  startIcon={<Save size={18} />}
                   onClick={handleSave}
                   disabled={updateProfileMutation.isPending}
-                  sx={{ backgroundColor: 'var(--emerald-primary)', color: '#0B0B0F', fontWeight: 700, px: 4 }}
+                  sx={{ 
+                    background: 'linear-gradient(135deg, #00D4A3 0%, #0B3B32 100%)', 
+                    color: '#040D0C', 
+                    fontWeight: 800, 
+                    px: 4, 
+                    borderRadius: '30px',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #39E7C0 0%, #00D4A3 100%)',
+                    }
+                  }}
                 >
                   {updateProfileMutation.isPending ? 'Saving...' : 'Save Changes'}
                 </Button>
@@ -310,12 +330,12 @@ const Profile = () => {
 
             <Typography variant="h6" sx={{ fontWeight: 800, mb: 3 }}>Security & Password</Typography>
             {passwordError && (
-              <Alert severity="error" sx={{ mb: 3, backgroundColor: 'rgba(244, 67, 54, 0.1)', color: '#f44336' }}>
+              <Alert severity="error" sx={{ mb: 3, backgroundColor: 'rgba(244, 67, 54, 0.1)', color: '#f44336', borderRadius: '12px' }}>
                 {passwordError}
               </Alert>
             )}
             {passwordSuccess && (
-              <Alert severity="success" sx={{ mb: 3, backgroundColor: 'rgba(76, 175, 80, 0.1)', color: '#4CAF50' }}>
+              <Alert severity="success" sx={{ mb: 3, backgroundColor: 'rgba(212, 175, 55, 0.1)', color: '#D4AF37', borderRadius: '12px', fontWeight: 700 }}>
                 Password updated successfully!
               </Alert>
             )}
@@ -343,7 +363,16 @@ const Profile = () => {
                   variant="contained" 
                   onClick={handlePasswordChange}
                   disabled={isUpdatingPassword}
-                  sx={{ backgroundColor: 'var(--emerald-primary)', color: '#0B0B0F', fontWeight: 700, px: 4 }}
+                  sx={{ 
+                    background: 'linear-gradient(135deg, #00D4A3 0%, #0B3B32 100%)', 
+                    color: '#040D0C', 
+                    fontWeight: 800, 
+                    px: 4, 
+                    borderRadius: '30px',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #39E7C0 0%, #00D4A3 100%)',
+                    }
+                  }}
                 >
                   {isUpdatingPassword ? 'Updating...' : 'Update Password'}
                 </Button>
@@ -378,7 +407,7 @@ const Profile = () => {
       </Grid>
 
       <Snackbar open={success} autoHideDuration={6000} onClose={() => setSuccess(false)}>
-        <Alert onClose={() => setSuccess(false)} severity="success" sx={{ width: '100%', backgroundColor: '#4CAF50', color: '#fff' }}>
+        <Alert onClose={() => setSuccess(false)} severity="success" sx={{ width: '100%', backgroundColor: '#D4AF37', color: '#040D0C', fontWeight: 800, borderRadius: '16px' }}>
           Profile updated successfully!
         </Alert>
       </Snackbar>

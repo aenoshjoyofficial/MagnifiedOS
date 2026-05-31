@@ -31,37 +31,36 @@ declare module '@mui/material/styles' {
   }
 }
 
-
 const theme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#10B981', // Emerald Primary
-      light: '#34D399', // Emerald Light
-      dark: '#061A14', // Emerald Dark
+      main: '#00D4A3', // Emerald Primary
+      light: '#39E7C0', // Emerald Light
+      dark: '#05231E', // Emerald Dark
     },
     secondary: {
       main: '#D4AF37', // Gold Primary
-      light: '#F5D76E', // Gold Light
+      light: '#F0D27A', // Soft Gold
     },
     background: {
-      default: '#0B0B0F', // Deep
-      paper: '#030712', // Night
+      default: '#040D0C', // Deep Emerald Black
+      paper: '#071815', // Rich Emerald Night
     },
     text: {
       primary: '#FFFFFF',
       secondary: '#94A3B8',
     },
     emerald: {
-      main: '#10B981',
-      light: '#34D399',
-      mid: '#0B2A22',
-      dark: '#061A14',
-      deep: '#020C0A',
+      main: '#00D4A3',
+      light: '#39E7C0',
+      mid: '#0B3B32',
+      dark: '#05231E',
+      deep: '#02120F',
     },
     gold: {
       main: '#D4AF37',
-      light: '#F5D76E',
+      light: '#F0D27A',
       glow: 'rgba(212, 175, 55, 0.3)',
     },
   },
@@ -111,20 +110,61 @@ const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 30, // Softer pill design
           textTransform: 'none',
-          fontWeight: 600,
+          fontWeight: 750,
           padding: '10px 24px',
+          transition: 'all 0.3s ease-in-out',
         },
       },
       variants: [
         {
           props: { variant: 'contained', color: 'primary' },
           style: {
-            background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-            color: 'white',
+            background: 'linear-gradient(135deg, #00D4A3 0%, #0B3B32 100%)',
+            color: '#040D0C',
+            fontWeight: 800,
+            boxShadow: '0 4px 15px rgba(0, 212, 163, 0.2)',
             '&:hover': {
-              background: 'linear-gradient(135deg, #34D399 0%, #10B981 100%)',
+              background: 'linear-gradient(135deg, #39E7C0 0%, #00D4A3 100%)',
+              boxShadow: '0 6px 22px rgba(0, 212, 163, 0.45)',
+              transform: 'translateY(-1px)',
+            },
+          },
+        },
+        {
+          props: { variant: 'contained', color: 'secondary' },
+          style: {
+            background: 'linear-gradient(135deg, #D4AF37 0%, #F0D27A 100%)',
+            color: '#040D0C',
+            fontWeight: 800,
+            boxShadow: '0 4px 15px rgba(212, 175, 55, 0.2)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #F0D27A 0%, #D4AF37 100%)',
+              boxShadow: '0 6px 22px rgba(212, 175, 55, 0.45)',
+              transform: 'translateY(-1px)',
+            },
+          },
+        },
+        {
+          props: { variant: 'outlined', color: 'primary' },
+          style: {
+            borderColor: 'rgba(0, 212, 163, 0.4)',
+            color: '#00D4A3',
+            '&:hover': {
+              borderColor: '#00D4A3',
+              backgroundColor: 'rgba(0, 212, 163, 0.05)',
+            },
+          },
+        },
+        {
+          props: { variant: 'outlined', color: 'secondary' },
+          style: {
+            borderColor: 'rgba(212, 175, 55, 0.4)',
+            color: '#D4AF37',
+            '&:hover': {
+              borderColor: '#D4AF37',
+              backgroundColor: 'rgba(212, 175, 55, 0.05)',
             },
           },
         },
@@ -134,20 +174,25 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          backgroundColor: '#030712',
-          borderRadius: 16,
-          border: '1px solid #0B2A22',
+          backgroundColor: 'rgba(7, 24, 21, 0.45)', // Emerald-tinted glassmorphism
+          backdropFilter: 'blur(24px)',
+          borderRadius: 20,
+          border: '1px solid rgba(0, 212, 163, 0.15)',
+          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.35)',
         },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          backgroundColor: '#061A14',
-          border: '1px solid #0B2A22',
+          backgroundColor: 'rgba(5, 35, 30, 0.25)',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(0, 212, 163, 0.12)',
+          borderRadius: 20,
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           '&:hover': {
-            borderColor: '#10B981',
-            boxShadow: '0 0 20px rgba(16, 185, 129, 0.1)',
+            borderColor: 'rgba(0, 212, 163, 0.4)',
+            boxShadow: '0 0 25px rgba(0, 212, 163, 0.15)',
           },
         },
       },

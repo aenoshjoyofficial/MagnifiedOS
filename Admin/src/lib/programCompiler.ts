@@ -145,7 +145,9 @@ export const validateWorkbook = (workbook: XLSX.WorkBook): string[] => {
   checkColumns('LESSONS', ['lesson_id', 'day_number', 'week', 'title', 'theme', 'summary']);
   checkColumns('TASKS', [
     'task_id', 'lesson_id', 'module_id', 'task_order', 'task_title', 'task_type', 'duration', 'instructions', 'required', 'audio_url', 'video_url'
+    // Note: 'checklist_items' is an optional column (newline-separated items for checklist tasks)
   ]);
+
   checkColumns('MEDIA_LIBRARY', ['media_id', 'type', 'title', 'url', 'module_id']);
 
   if (errors.length > 0) {
@@ -289,6 +291,10 @@ export const compileWorkbook = (workbook: XLSX.WorkBook): ProgramJSON => {
             routine_window: mapTaskTypeToWindow(type),
             url: String(task.audio_url || task.video_url || '').trim(),
             text: String(task.instructions || '').trim(),
+            // Parse checklist_items column for checklist tasks (newline-separated, matches Admin UI format)
+            steps: type === 'checklist'
+              ? String(task.checklist_items || '').split('\n').map((s: string) => s.trim()).filter(Boolean)
+              : [],
             duration: durationText
           }
         };

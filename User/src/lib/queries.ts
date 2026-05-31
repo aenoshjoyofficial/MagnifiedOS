@@ -203,6 +203,9 @@ export const useCreateBooking = () => {
       return data;
     },
     onSuccess: () => {
+      // Invalidate admin bookings so the Admin panel reflects new bookings immediately
+      queryClient.invalidateQueries({ queryKey: ['admin-bookings'] });
+      // Also refresh sessions in case available slot counts change
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
     },
   });

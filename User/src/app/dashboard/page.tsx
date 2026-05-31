@@ -55,6 +55,52 @@ const Dashboard = () => {
 
   const program = enrollment?.programs;
   const completions = enrollment?.task_completions || [];
+
+  // Calculate streak from real task completion dates
+  const calculateStreak = React.useCallback(() => {
+    if (!completions || completions.length === 0) return 0;
+
+    // Collect unique calendar dates (YYYY-MM-DD) from completions
+    const dates = [...new Set(
+      completions.map((c: any) => {
+        const d = new Date(c.completed_at);
+        d.setHours(0, 0, 0, 0);
+        return d.toISOString().split('T')[0];
+      })
+    )] as string[];
+    dates.sort().reverse(); // Most recent first
+
+    // Build today and yesterday as YYYY-MM-DD strings
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    const today = todayDate.toISOString().split('T')[0];
+
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    yesterdayDate.setHours(0, 0, 0, 0);
+    const yesterday = yesterdayDate.toISOString().split('T')[0];
+
+    // Streak is broken if no completions today or yesterday
+    if (dates[0] !== today && dates[0] !== yesterday) return 0;
+
+    // Count consecutive days going backward from the most recent completion
+    let streak = 0;
+    const baseDate = new Date(dates[0] + 'T00:00:00');
+    for (let i = 0; i < dates.length; i++) {
+      const expectedDate = new Date(baseDate);
+      expectedDate.setDate(baseDate.getDate() - i);
+      const expected = expectedDate.toISOString().split('T')[0];
+
+      if (dates[i] === expected) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }, [completions]);
+
+  const currentStreak = calculateStreak();
   
   // Build a map of taskId to title and dayNumber, and get unique tasks
   const { totalTasks, completedCount } = React.useMemo(() => {
@@ -111,43 +157,71 @@ const Dashboard = () => {
   const currentDay = Math.min(calendarDays, totalDays);
 
   return (
-    <Box>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
+    <Box sx={{ py: 1 }}>
+      <Box sx={{ mb: 5 }}>
+        <Typography 
+          variant="h4" 
+          sx={{ 
+            fontWeight: 800, 
+            mb: 1, 
+            fontFamily: '"Playfair Display", serif', 
+            letterSpacing: '0.01em',
+            fontSize: { xs: '1.75rem', sm: '2.25rem', md: '2.5rem' },
+            textShadow: '0 2px 10px rgba(0, 212, 163, 0.1)'
+          }}
+        >
           Good {getTimeGreeting()}, {profile?.full_name?.split(' ')[0] || 'Explorer'}
         </Typography>
-        <Typography variant="body1" sx={{ color: '#B0B0B0' }}>
+        <Typography variant="body1" sx={{ color: 'var(--text-secondary)', fontWeight: 500, letterSpacing: '0.02em', fontSize: { xs: '0.9rem', sm: '1rem' } }}>
           Welcome back to your daily expansion.
         </Typography>
       </Box>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={4}>
         <Grid size={{ xs: 12, md: 8 }}>
           <Paper 
             sx={{ 
-              p: 4, 
+              p: { xs: 3, sm: 4.5 }, 
               height: '100%', 
-              background: 'linear-gradient(135deg, rgba(20, 20, 25, 0.9) 0%, rgba(10, 10, 15, 1) 100%)',
+              background: 'linear-gradient(135deg, rgba(7, 24, 21, 0.5) 0%, rgba(4, 13, 12, 0.9) 100%)',
+              backdropFilter: 'blur(24px)',
+              borderRadius: '24px',
+              border: '1px solid rgba(0, 212, 163, 0.18)',
               position: 'relative',
               overflow: 'hidden',
+              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 212, 163, 0.08)',
             }}
           >
             {enrollment ? (
               <Box sx={{ position: 'relative', zIndex: 1 }}>
-                <Typography variant="overline" sx={{ color: '#D4AF37', fontWeight: 700, letterSpacing: 2 }}>
+                <Typography variant="overline" sx={{ color: '#D4AF37', fontWeight: 800, letterSpacing: '0.15em', fontFamily: '"Outfit", sans-serif' }}>
                   CURRENT PROGRAM
                 </Typography>
-                <Typography variant="h4" sx={{ fontWeight: 800, mt: 1, mb: 1 }}>
+                <Typography 
+                  variant="h4" 
+                  sx={{ 
+                    fontWeight: 800, 
+                    mt: 1.5, 
+                    mb: 1.5, 
+                    fontSize: { xs: '1.5rem', sm: '2rem', md: '2.25rem' },
+                    fontFamily: '"Playfair Display", serif',
+                    letterSpacing: '0.01em'
+                  }}
+                >
                   {program?.title || 'Program Title'}
                 </Typography>
-                <Typography variant="body2" sx={{ color: '#B0B0B0', mb: 4, maxWidth: '80%' }}>
+                <Typography variant="body2" sx={{ color: '#B0B0B0', mb: 4, maxWidth: { xs: '100%', sm: '85%' }, lineHeight: 1.6 }}>
                   {program?.description || 'Deep neural rewiring for emotional sovereignty and cognitive clarity.'}
                 </Typography>
 
-                <Box sx={{ mb: 4 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Day {currentDay} of {totalDays}</Typography>
-                    <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 600 }}>{progressPercent}% Complete</Typography>
+                <Box sx={{ mb: 4.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, letterSpacing: '0.02em', color: '#EAEAEA' }}>
+                      Day {currentDay} of {totalDays} Integration
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 700 }}>
+                      {progressPercent}% Complete
+                    </Typography>
                   </Box>
                   <LinearProgress 
                     variant="determinate" 
@@ -155,9 +229,9 @@ const Dashboard = () => {
                     sx={{ 
                       height: 8, 
                       borderRadius: 4,
-                      backgroundColor: 'rgba(212, 175, 55, 0.1)',
+                      backgroundColor: 'rgba(212, 175, 55, 0.05)',
                       '& .MuiLinearProgress-bar': {
-                        backgroundColor: '#D4AF37',
+                        background: 'linear-gradient(90deg, #00D4A3 0%, #D4AF37 100%)',
                         borderRadius: 4,
                       }
                     }} 
@@ -168,14 +242,16 @@ const Dashboard = () => {
                   component={Link}
                   to="/today"
                   variant="contained" 
+                  color="primary"
                   startIcon={<Play size={18} fill="currentColor" />}
                   sx={{ 
-                    backgroundColor: '#D4AF37', 
-                    color: '#0B0B0F',
-                    px: 4,
-                    py: 1.5,
-                    fontSize: '1rem',
-                    '&:hover': { backgroundColor: '#B8962D' }
+                    px: { xs: 3, sm: 5 },
+                    py: 1.75,
+                    fontSize: '0.95rem',
+                    fontWeight: 800,
+                    borderRadius: '30px',
+                    boxShadow: '0 4px 20px rgba(0, 212, 163, 0.25)',
+                    width: { xs: '100%', sm: 'auto' }
                   }}
                 >
                   Continue Today's Practice
@@ -183,11 +259,11 @@ const Dashboard = () => {
               </Box>
             ) : (
               <Box sx={{ position: 'relative', zIndex: 1, py: 4, textAlign: 'center' }}>
-                <Typography variant="h5" sx={{ fontWeight: 800, mb: 2 }}>No Active Program</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, fontFamily: '"Playfair Display", serif' }}>No Active Program</Typography>
                 <Typography variant="body2" sx={{ color: '#B0B0B0', mb: 4 }}>
                   Explore our programs to begin your transformation journey.
                 </Typography>
-                <Button variant="contained" component={Link} to="/program" sx={{ backgroundColor: '#D4AF37', color: '#0B0B0F' }}>Explore Programs</Button>
+                <Button variant="contained" color="primary" component={Link} to="/program">Explore Programs</Button>
               </Box>
             )}
 
@@ -196,9 +272,9 @@ const Dashboard = () => {
                 position: 'absolute', 
                 top: -20, 
                 right: -20, 
-                width: 200, 
-                height: 200, 
-                background: 'radial-gradient(circle, rgba(212, 175, 55, 0.1) 0%, transparent 70%)',
+                width: 250, 
+                height: 250, 
+                background: 'radial-gradient(circle, rgba(0, 212, 163, 0.12) 0%, transparent 70%)',
                 zIndex: 0
               }} 
             />
@@ -206,33 +282,64 @@ const Dashboard = () => {
         </Grid>
 
         <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ p: 4, height: '100%', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <Paper 
+            sx={{ 
+              p: { xs: 3, sm: 4.5 }, 
+              height: '100%', 
+              textAlign: 'center', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              justifyContent: 'center',
+              background: 'linear-gradient(135deg, rgba(7, 24, 21, 0.4) 0%, rgba(4, 13, 12, 0.85) 100%)',
+              backdropFilter: 'blur(20px)',
+              borderRadius: '24px',
+              border: '1px solid rgba(0, 212, 163, 0.15)',
+              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4), 0 0 30px rgba(212, 175, 55, 0.05)',
+            }}
+          >
             <Box 
               sx={{ 
                 mx: 'auto',
                 width: 80, 
                 height: 80, 
                 borderRadius: '50%', 
-                backgroundColor: 'rgba(212, 175, 55, 0.1)',
+                backgroundColor: 'rgba(212, 175, 55, 0.06)',
+                border: '1px solid rgba(212, 175, 55, 0.2)',
+                boxShadow: '0 0 25px rgba(212, 175, 55, 0.18)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                mb: 2
+                mb: 3
               }}
             >
-              <Flame size={40} color="#D4AF37" fill="#D4AF37" />
+              <Flame size={42} color="#D4AF37" fill="#D4AF37" />
             </Box>
-            <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>{completedCount > 0 ? 5 : 0}</Typography>
-            <Typography variant="h6" sx={{ color: '#D4AF37', fontWeight: 600, mb: 2 }}>DAY STREAK</Typography>
-            <Typography variant="body2" sx={{ color: '#B0B0B0' }}>
+            <Typography variant="h2" sx={{ fontWeight: 800, mb: 0.5, fontFamily: '"Playfair Display", serif', color: '#FFFFFF' }}>
+              {currentStreak}
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 800, letterSpacing: '0.15em', mb: 2, fontFamily: '"Outfit", sans-serif' }}>
+              DAY STREAK
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#B0B0B0', lineHeight: 1.5 }}>
               Consistency is the key to neural rewiring.
             </Typography>
           </Paper>
         </Grid>
 
         <Grid size={{ xs: 12 }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, mt: 2 }}>Quick Actions</Typography>
-          <Grid container spacing={2}>
+          <Typography 
+            variant="h6" 
+            sx={{ 
+              fontWeight: 800, 
+              mb: 2.5, 
+              mt: 3, 
+              fontFamily: '"Playfair Display", serif',
+              letterSpacing: '0.02em'
+            }}
+          >
+            Quick Actions
+          </Typography>
+          <Grid container spacing={3}>
             {[
               { label: 'View Program', icon: BookOpen, path: '/program' },
               { label: 'Sessions', icon: Calendar, path: '/sessions' },
@@ -248,16 +355,23 @@ const Dashboard = () => {
                     alignItems: 'center', 
                     justifyContent: 'space-between',
                     textDecoration: 'none',
-                    transition: 'all 0.2s',
+                    borderRadius: '20px',
+                    backgroundColor: 'rgba(7, 24, 21, 0.35)',
+                    backdropFilter: 'blur(16px)',
+                    border: '1px solid rgba(0, 212, 163, 0.15)',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
                     '&:hover': {
-                      borderColor: 'rgba(212, 175, 55, 0.5)',
+                      borderColor: 'rgba(0, 212, 163, 0.45)',
+                      boxShadow: '0 8px 30px rgba(0, 212, 163, 0.18)',
+                      backgroundColor: 'rgba(7, 24, 21, 0.5)',
                       transform: 'translateY(-4px)'
                     }
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <action.icon size={24} color="#D4AF37" />
-                    <Typography sx={{ fontWeight: 600 }}>{action.label}</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
+                    <action.icon size={22} color="#00D4A3" />
+                    <Typography sx={{ fontWeight: 700, color: '#EAEAEA', fontSize: '0.95rem' }}>{action.label}</Typography>
                   </Box>
                   <ArrowRight size={18} color="#B0B0B0" />
                 </Paper>

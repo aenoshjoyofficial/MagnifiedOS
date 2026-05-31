@@ -70,8 +70,9 @@ const Sidebar = () => {
         '& .MuiDrawer-paper': {
           width: isMobile ? 260 : drawerWidth,
           boxSizing: 'border-box',
-          backgroundColor: '#0B0B0F',
-          borderRight: '1px solid rgba(212, 175, 55, 0.1)',
+          backgroundColor: 'rgba(5, 23, 20, 0.65)',
+          backdropFilter: 'blur(20px)',
+          borderRight: '1px solid rgba(0, 212, 163, 0.15)',
           transition: 'width 0.3s ease',
           overflowX: 'hidden',
         },
@@ -110,12 +111,12 @@ const Sidebar = () => {
                     justifyContent: isSidebarOpen ? 'initial' : 'center',
                     px: 2.5,
                     borderRadius: 2,
-                    backgroundColor: isActive ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
-                    color: isActive ? '#D4AF37' : '#EAEAEA',
+                    backgroundColor: isActive ? 'rgba(0, 212, 163, 0.08)' : 'transparent',
+                    color: isActive ? '#00D4A3' : '#EAEAEA',
                     '&:hover': {
-                      backgroundColor: 'rgba(212, 175, 55, 0.05)',
+                      backgroundColor: 'rgba(0, 212, 163, 0.04)',
                     },
-                    border: item.highlight && isActive ? '1px solid rgba(212, 175, 55, 0.3)' : 'none',
+                    border: item.highlight && isActive ? '1px solid rgba(0, 212, 163, 0.25)' : 'none',
                   }}
                 >
                   <ListItemIcon
@@ -123,7 +124,7 @@ const Sidebar = () => {
                       minWidth: 0,
                       mr: isSidebarOpen ? 2 : 'auto',
                       justifyContent: 'center',
-                      color: isActive || item.highlight ? '#D4AF37' : 'inherit',
+                      color: isActive ? '#00D4A3' : item.highlight ? '#D4AF37' : 'inherit',
                     }}
                   >
                     <Icon size={22} />

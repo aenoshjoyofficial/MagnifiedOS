@@ -30,9 +30,13 @@ const TextTask = ({ content, onComplete }: TextTaskProps) => {
         }}
       >
         <Typography variant="body1" component="div">
-          {content.split('\n').map((paragraph, i) => (
-            <p key={i}>{paragraph}</p>
-          ))}
+          {/<[a-z][\s\S]*>/i.test(content) ? (
+            <div dangerouslySetInnerHTML={{ __html: content }} />
+          ) : (
+            content.split('\n').map((paragraph, i) => (
+              <p key={i}>{paragraph}</p>
+            ))
+          )}
         </Typography>
       </Box>
 

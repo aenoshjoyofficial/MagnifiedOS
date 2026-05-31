@@ -1,5 +1,10 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import type { Subscription } from '@supabase/supabase-js';
+
+// Module-level variable to hold the auth subscription — lives outside the store
+// so it persists across renders and can be properly unsubscribed
+let authSubscription: Subscription | null = null;
 
 interface UIState {
   isSidebarOpen: boolean;
@@ -49,8 +54,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ loading: false });
     }
 
-    // Listen for auth changes
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    // Unsubscribe any previous listener before registering a new one
+    // (guards against React Strict Mode double-invocation and HMR re-registration)
+    if (authSubscription) {
+      authSubscription.unsubscribe();
+      authSubscription = null;
+    }
+
+    // Listen for auth changes — store the returned subscription so it can be cleaned up
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
         set({ user: session.user });
         const { data: profile } = await supabase
@@ -64,6 +76,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       set({ loading: false });
     });
+
+    authSubscription = subscription;
   },
 
   signIn: async (email, password) => {
@@ -83,7 +97,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
+    // Unsubscribe the auth listener when the user explicitly signs out
+    if (authSubscription) {
+      authSubscription.unsubscribe();
+      authSubscription = null;
+    }
     await supabase.auth.signOut();
-    set({ user: null, profile: null });
+    set({ user: null, profile: null, initialized: false });
   },
 }));
+

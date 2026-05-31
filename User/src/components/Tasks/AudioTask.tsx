@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Box, 
   Typography, 
@@ -35,13 +35,6 @@ const AudioTask = ({ url, onComplete }: AudioTaskProps) => {
   const [isCompleted, setIsCompleted] = useState(false);
   
   const audioRef = useRef<HTMLAudioElement>(null);
-
-  useEffect(() => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration || 0);
-    }
-  }, [audioRef.current?.readyState]);
-
   const togglePlay = () => {
     if (isPlaying) {
       audioRef.current?.pause();
@@ -54,10 +47,12 @@ const AudioTask = ({ url, onComplete }: AudioTaskProps) => {
   const handleTimeUpdate = () => {
     if (audioRef.current) {
       const current = audioRef.current.currentTime;
+      // Read duration directly from the DOM element — avoids stale closure on React state
+      const audioDuration = audioRef.current.duration;
       setCurrentTime(current);
       
-      // Auto-complete at 90%
-      if (!isCompleted && duration > 0 && (current / duration) >= 0.9) {
+      // Auto-complete at 90% — use live DOM duration (not state) to avoid race condition
+      if (!isCompleted && isFinite(audioDuration) && audioDuration > 0 && (current / audioDuration) >= 0.9) {
         setIsCompleted(true);
         onComplete();
       }

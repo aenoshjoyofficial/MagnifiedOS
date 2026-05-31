@@ -1,29 +1,29 @@
 :root {
   /* Background Colors */
-  --bg-deep: #0B0B0F;
-  --bg-night: #030712;
-  --bg-temple: #031B14;
+  --bg-deep: #040D0C;
+  --bg-night: #020908;
+  --bg-temple: #041C16;
   
   /* Emerald Palette */
-  --emerald-primary: #10B981;
-  --emerald-light: #34D399;
-  --emerald-mid: #0B2A22;
-  --emerald-dark: #061A14;
-  --emerald-deep: #020C0A;
+  --emerald-primary: #00D4A3;
+  --emerald-light: #39E7C0;
+  --emerald-mid: #0B3B32;
+  --emerald-dark: #05231E;
+  --emerald-deep: #02120F;
 
   /* Gold Palette */
   --gold-primary: #D4AF37;
-  --gold-light: #F5D76E;
+  --gold-light: #F0D27A;
   --gold-glow-color: rgba(212, 175, 55, 0.3);
 
   /* Gradients */
-  --emerald-radial: radial-gradient(circle at center, #0F3D2E 0%, #0B0B0F 70%);
-  --bodywork-gradient: linear-gradient(to bottom, #061A14, #0B2A22, #020C0A);
-  --temple-gradient: linear-gradient(to bottom, #0B0A07, #1A140B, #020201);
+  --emerald-radial: radial-gradient(circle at center, rgba(0, 212, 163, 0.15) 0%, #040D0C 70%);
+  --bodywork-gradient: linear-gradient(to bottom, #05231E, #0B3B32, #02120F);
+  --temple-gradient: linear-gradient(to bottom, #040D0C, #0B3B32, #020908);
 
   /* Glow Effects */
-  --emerald-glow: 0 0 40px rgba(16, 185, 129, 0.15);
-  --gold-glow: 0 0 40px rgba(212, 175, 55, 0.15);
+  --emerald-glow: 0 0 30px rgba(0, 212, 163, 0.25);
+  --gold-glow: 0 0 30px rgba(212, 175, 55, 0.25);
 
   --foreground: #FFFFFF;
   --text-secondary: #94A3B8;

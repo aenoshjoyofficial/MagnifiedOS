@@ -42,7 +42,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
         }}
       >
         <Topbar />
-        <Box sx={{ p: { xs: 2, md: 4 }, flexGrow: 1 }}>
+        <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, flexGrow: 1 }}>
           {children}
         </Box>
       </Box>

@@ -54,7 +54,7 @@ const ChecklistTask = ({ steps, onComplete, disabled = false }: ChecklistTaskPro
             height: 3, 
             borderRadius: 1.5,
             backgroundColor: 'rgba(255, 255, 255, 0.05)',
-            '& .MuiLinearProgress-bar': { backgroundColor: '#D4AF37' }
+            '& .MuiLinearProgress-bar': { background: 'linear-gradient(90deg, #00D4A3 0%, #D4AF37 100%)' }
           }} 
         />
       </Box>
