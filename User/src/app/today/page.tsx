@@ -16,7 +16,12 @@ import {
   CheckCircle2,
   Lock,
   PlayCircle,
-  Trophy
+  Trophy,
+  ChevronDown,
+  ChevronUp,
+  CheckSquare,
+  Mic,
+  FileText
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import AudioTask from '@/components/Tasks/AudioTask';
@@ -600,6 +605,7 @@ const isExternalVideo = (url: string) => {
 
 const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: any, index: number, isCompleted: boolean, isLocked: boolean, onComplete: () => void }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [checklistOpen, setChecklistOpen] = useState(false);
 
   const mainUrl = task.content?.url || '';
   const resourceUrl = task.content?.resource_url || '';
@@ -671,7 +677,19 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
               color: isCompleted ? '#D4AF37' : '#B0B0B0'
             }}
           >
-            {isCompleted ? <CheckCircle2 size={24} /> : isLocked ? <Lock size={24} /> : <PlayCircle size={24} />}
+            {isCompleted ? (
+              <CheckCircle2 size={24} />
+            ) : isLocked ? (
+              <Lock size={24} />
+            ) : task.type === 'checklist' ? (
+              <CheckSquare size={24} />
+            ) : task.type === 'audio' ? (
+              <Mic size={24} />
+            ) : task.type === 'text' ? (
+              <FileText size={24} />
+            ) : (
+              <PlayCircle size={24} />
+            )}
           </Box>
           <Box>
             <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 700, fontSize: '0.75rem', letterSpacing: 1 }}>
@@ -680,7 +698,28 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
             <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
               {task.title}
             </Typography>
-
+            {task.type === 'checklist' && task.content?.steps && task.content.steps.length > 0 && (
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setChecklistOpen(!checklistOpen);
+                }}
+                endIcon={checklistOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                size="small"
+                sx={{
+                  color: '#D4AF37',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  p: 0,
+                  mt: 0.75,
+                  minWidth: 0,
+                  textTransform: 'none',
+                  '&:hover': { background: 'transparent', textDecoration: 'underline' }
+                }}
+              >
+                {checklistOpen ? 'Hide Checklist' : 'View Checklist'}
+              </Button>
+            )}
           </Box>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }} onClick={(e) => e.stopPropagation()}>
@@ -712,6 +751,7 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
                 '&.Mui-disabled': {
                   color: '#4CAF50',
                   borderColor: 'transparent',
+                  colorScheme: 'dark'
                 }
               }}
             >
@@ -722,7 +762,7 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
       </Box>
 
       {/* Checklist items rendered directly inside the card under the title/header row */}
-      {task.type === 'checklist' && task.content?.steps && task.content.steps.length > 0 && (
+      {task.type === 'checklist' && task.content?.steps && task.content.steps.length > 0 && checklistOpen && (
         <Box 
           sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}
           onClick={(e) => e.stopPropagation()} // Prevent card collapse when interacting with the checklist
