@@ -20,6 +20,12 @@ const VideoTask = ({ url, onComplete }: VideoTaskProps) => {
   const getEmbedUrl = (url: string) => {
     if (!url) return '';
     
+    // YouTube Shorts
+    const shortsMatch = url.match(/\/shorts\/([^"&?\/ ]{11})/i);
+    if (shortsMatch && shortsMatch[1]) {
+      return `https://www.youtube.com/embed/${shortsMatch[1]}`;
+    }
+
     // YouTube
     const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/ ]{11})/i);
     if (ytMatch && ytMatch[1]) {

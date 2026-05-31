@@ -48,6 +48,10 @@ app.use(
           "data:",
           "https://*.supabase.co"
         ],
+        mediaSrc: [
+          "'self'",
+          "https://*.supabase.co"
+        ],
         frameSrc: [
           "'self'",
           "https://www.youtube.com",
