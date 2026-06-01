@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { CHAMBER_KEYS } from './chambersData';
 
 export interface ProgramJSON {
   version: string;
@@ -314,7 +315,10 @@ export const compileWorkbook = (workbook: XLSX.WorkBook): ProgramJSON => {
 
     return {
       title: standardTitle,
-      order_index: Number(modRow.order || 0),
+      order_index: (() => {
+        const idx = CHAMBER_KEYS.indexOf(chamberId as any);
+        return idx !== -1 ? idx + 1 : Number(modRow.order || 99);
+      })(),
       lessons: lessonsList
     };
   });

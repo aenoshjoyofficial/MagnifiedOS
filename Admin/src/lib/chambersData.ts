@@ -19,9 +19,9 @@ export const CHAMBER_KEYS = [
   'field-design',
   'living-frame',
   'the-plate',
-  'sleep-cocoon',
   'breath-atelier',
-  'the-signature'
+  'the-signature',
+  'sleep-cocoon'
 ] as const;
 
 export const CHAMBERS_INFO = {
@@ -29,10 +29,10 @@ export const CHAMBERS_INFO = {
   'frequency-field': { name: 'THE FREQUENCY FIELD', number: 2, defaultSystem: '', defaultAnchor: '' },
   'field-design': { name: 'FIELD DESIGN', number: 3, defaultSystem: '', defaultAnchor: '' },
   'living-frame': { name: 'THE LIVING FRAME', number: 4, defaultSystem: '', defaultAnchor: '' },
-  'the-plate': { name: 'THE PLATE', defaultSystem: '', defaultAnchor: '' },
-  'sleep-cocoon': { name: 'SLEEP COCOON', defaultSystem: '', defaultAnchor: '' },
-  'breath-atelier': { name: 'BREATH ATELIER', defaultSystem: '', defaultAnchor: '' },
-  'the-signature': { name: 'THE SIGNATURE', defaultSystem: '', defaultAnchor: '' }
+  'the-plate': { name: 'THE PLATE', number: 5, defaultSystem: '', defaultAnchor: '' },
+  'breath-atelier': { name: 'BREATH ATELIER', number: 6, defaultSystem: '', defaultAnchor: '' },
+  'the-signature': { name: 'THE SIGNATURE', number: 7, defaultSystem: '', defaultAnchor: '' },
+  'sleep-cocoon': { name: 'SLEEP COCOON', number: 8, defaultSystem: '', defaultAnchor: '' }
 };
 
 export const WEEK_THEMES = [

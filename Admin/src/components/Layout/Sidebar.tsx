@@ -49,9 +49,9 @@ const chamberItems = [
   { label: 'Field Design', path: '/admin/chambers/field-design', icon: Compass },
   { label: 'The Living Frame', path: '/admin/chambers/living-frame', icon: GridIcon },
   { label: 'The Plate', path: '/admin/chambers/the-plate', icon: Utensils },
-  { label: 'Sleep Cocoon', path: '/admin/chambers/sleep-cocoon', icon: Moon },
   { label: 'Breath Atelier', path: '/admin/chambers/breath-atelier', icon: Wind },
   { label: 'The Signature', path: '/admin/chambers/the-signature', icon: Award },
+  { label: 'Sleep Cocoon', path: '/admin/chambers/sleep-cocoon', icon: Moon },
 ];
 
 const Sidebar = () => {
