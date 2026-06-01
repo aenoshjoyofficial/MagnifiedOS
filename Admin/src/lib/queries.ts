@@ -531,12 +531,18 @@ export const useUploadAsset = () => {
         console.error("Error refreshing session before upload:", authErr);
       }
 
-      const { data, error } = await supabase.storage
+      const uploadPromise = supabase.storage
         .from(bucket)
         .upload(path, file, {
           upsert: true,
           cacheControl: '3600'
         });
+
+      const timeoutPromise = new Promise<{ data: any, error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error('Upload request timed out after 60 seconds. Please check your network connection or Supabase bucket permission policies.')), 60000)
+      );
+
+      const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
       
       if (error) throw error;
 
