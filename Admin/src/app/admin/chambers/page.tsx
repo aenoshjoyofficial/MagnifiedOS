@@ -146,17 +146,26 @@ const ChamberPage = () => {
 
     setIsUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split('.').pop() || '';
       const fileName = `chamber-task-${Date.now()}.${fileExt}`;
       const bucket = 'program-assets';
+      const storagePath = `tasks/${fileName}`;
       
       const publicUrl = await uploadAssetMutation.mutateAsync({
         file,
         bucket,
-        path: `tasks/${fileName}`
+        path: storagePath
       });
 
       setContentUrl(publicUrl);
+
+      // Auditing/debugging logs
+      console.log('[DEBUG UPLOAD] Upload completed successfully:');
+      console.log(`- Uploaded file name  : ${file.name}`);
+      console.log(`- Uploaded file type  : ${file.type}`);
+      console.log(`- Storage path        : ${storagePath}`);
+      console.log(`- Generated public URL: ${publicUrl}`);
+      console.log(`- Assigned resource URL: ${publicUrl}`);
     } catch (err: any) {
       console.error('Upload failed:', err);
       const errMsg = err?.message || err?.error_description || String(err);
@@ -401,17 +410,28 @@ const ChamberPage = () => {
 
     setEditIsUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split('.').pop() || '';
       const fileName = `chamber-task-${Date.now()}.${fileExt}`;
       const bucket = 'program-assets';
+      const storagePath = `tasks/${fileName}`;
       
       const publicUrl = await uploadAssetMutation.mutateAsync({
         file,
         bucket,
-        path: `tasks/${fileName}`
+        path: storagePath
       });
 
+      // Update both core URL state and the visible UI Resource URL field immediately
       setEditContentUrl(publicUrl);
+      setEditResourceUrl(publicUrl);
+
+      // Auditing/debugging logs
+      console.log('[DEBUG EDIT UPLOAD] Upload completed successfully:');
+      console.log(`- Uploaded file name  : ${file.name}`);
+      console.log(`- Uploaded file type  : ${file.type}`);
+      console.log(`- Storage path        : ${storagePath}`);
+      console.log(`- Generated public URL: ${publicUrl}`);
+      console.log(`- Assigned resource URL: ${publicUrl}`);
     } catch (err: any) {
       console.error('Upload failed:', err);
       const errMsg = err?.message || err?.error_description || String(err);
@@ -446,7 +466,7 @@ const ChamberPage = () => {
         url: urlVal || (isYoutubeOrVimeo ? resVal : ''),
         text: editDescription.trim(),
         format: editType,
-        resource_url: resVal || (isYoutubeOrVimeo ? urlVal : ''),
+        resource_url: isYoutubeOrVimeo ? resVal : '',
         duration: editDuration.trim(),
         steps: stepsArray
       };
