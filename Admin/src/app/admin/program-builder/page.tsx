@@ -713,7 +713,10 @@ const ProgramBuilder = () => {
       if (tasks.length === 0) return null;
 
       const anchor = tasks.map((t: any) => t.title).join(' · ');
-      const instruction = tasks.map((t: any) => `<p>${t.description || t.content?.text || ''}</p>`).join('');
+      const instruction = tasks.map((t: any) => {
+        const desc = t.description || t.content?.text || '';
+        return /<[a-z][\s\S]*>/i.test(desc) ? desc : `<p>${desc}</p>`;
+      }).join('');
 
       // Determine system name
       const systemName = parentModule?.title || 'Daily Integration';
@@ -1094,7 +1097,10 @@ const ProgramBuilder = () => {
             if (tasks.length === 0) return null;
 
             const anchor = tasks.map((t: any) => t.title).join(' · ');
-            const instruction = tasks.map((t: any) => `<p>${t.description || t.content?.text || ''}</p>`).join('');
+            const instruction = tasks.map((t: any) => {
+              const desc = t.description || t.content?.text || '';
+              return /<[a-z][\s\S]*>/i.test(desc) ? desc : `<p>${desc}</p>`;
+            }).join('');
 
             const systemName = m.title || 'Daily Integration';
 
@@ -2335,9 +2341,12 @@ const CreatedProgramTab = () => {
                 {/* Program Description */}
                 {p.description && (
                   <Box sx={{ px: 3, pb: 2, borderBottom: isExpanded ? '1px solid rgba(255, 255, 255, 0.05)' : 'none' }}>
-                    <Typography variant="body2" sx={{ color: '#B0B0B0', fontStyle: 'italic', fontSize: '0.85rem' }}>
-                      {p.description}
-                    </Typography>
+                    <Typography 
+                      variant="body2" 
+                      sx={{ color: '#B0B0B0', fontStyle: 'italic', fontSize: '0.85rem' }}
+                      component="div"
+                      dangerouslySetInnerHTML={{ __html: p.description }}
+                    />
                   </Box>
                 )}
 

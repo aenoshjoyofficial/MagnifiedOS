@@ -111,6 +111,20 @@ const RichTextEditor = ({ value, onChange, onBlur, maxLength = 1000, placeholder
 
         <Divider orientation="vertical" flexItem sx={{ mx: 0.5, borderColor: 'rgba(255, 255, 255, 0.1)' }} />
 
+        <ToggleButtonGroup size="small" aria-label="headings">
+          <ToggleButton value="h2" onClick={() => handleCommand('formatBlock', '<h2>')} title="Heading (H2)" sx={{ px: 1.5, minWidth: 32, fontSize: '0.75rem', fontWeight: 800, color: '#D4AF37' }}>
+            H2
+          </ToggleButton>
+          <ToggleButton value="h3" onClick={() => handleCommand('formatBlock', '<h3>')} title="Subheading (H3)" sx={{ px: 1.5, minWidth: 32, fontSize: '0.75rem', fontWeight: 800, color: '#EAEAEA' }}>
+            H3
+          </ToggleButton>
+          <ToggleButton value="p" onClick={() => handleCommand('formatBlock', '<p>')} title="Paragraph" sx={{ px: 1.5, minWidth: 32, fontSize: '0.75rem', fontWeight: 800, color: '#B0B0B0' }}>
+            P
+          </ToggleButton>
+        </ToggleButtonGroup>
+
+        <Divider orientation="vertical" flexItem sx={{ mx: 0.5, borderColor: 'rgba(255, 255, 255, 0.1)' }} />
+
         <ToggleButtonGroup size="small" aria-label="lists">
           <ToggleButton value="list-bullet" onClick={() => handleCommand('insertUnorderedList')} title="Bullet List">
             <FormatListBulletedIcon fontSize="small" sx={{ color: '#EAEAEA' }} />
@@ -153,6 +167,22 @@ const RichTextEditor = ({ value, onChange, onBlur, maxLength = 1000, placeholder
             left: 12,
             top: 12,
             pointerEvents: 'none'
+          },
+          '& h2': {
+            fontSize: '1.2rem',
+            fontWeight: 800,
+            color: '#D4AF37',
+            marginTop: '12px',
+            marginBottom: '6px',
+            fontFamily: 'Outfit, sans-serif'
+          },
+          '& h3': {
+            fontSize: '1.05rem',
+            fontWeight: 700,
+            color: '#EAEAEA',
+            marginTop: '10px',
+            marginBottom: '4px',
+            fontFamily: 'Outfit, sans-serif'
           },
           '& ul, & ol': {
             paddingLeft: '20px',

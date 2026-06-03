@@ -52,6 +52,7 @@ import {
   useUploadAsset
 } from '@/lib/queries';
 import { CHAMBERS_INFO, matchChamberKey, generateRoutineHtml } from '@/lib/chambersData';
+import RichTextEditor from '@/components/RichTextEditor';
 
 // Map chamber ID to its visual icon
 const getChamberIcon = (chamberId: string) => {
@@ -558,7 +559,10 @@ const ChamberPage = () => {
               if (tasks.length === 0) return null;
 
               const anchor = tasks.map((t: any) => t.title).join(' · ');
-              const instruction = tasks.map((t: any) => `<p>${t.description || t.content?.text || ''}</p>`).join('');
+              const instruction = tasks.map((t: any) => {
+                const desc = t.description || t.content?.text || '';
+                return /<[a-z][\s\S]*>/i.test(desc) ? desc : `<p>${desc}</p>`;
+              }).join('');
 
               const systemName = matchedModule?.title || 'Daily Integration';
 
@@ -721,16 +725,17 @@ const ChamberPage = () => {
                     />
                   )}
 
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Description / Instruction (Optional)"
-                    value={taskDescription}
-                    onChange={(e) => setTaskDescription(e.target.value)}
-                    multiline
-                    rows={2}
-                    placeholder={placeholders[taskType].description}
-                  />
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#B0B0B0', mb: 1, display: 'block' }}>
+                      {taskType === 'text' ? 'Protocol Text / Instructions' : 'Description / Instruction (Optional)'}
+                    </Typography>
+                    <RichTextEditor
+                      value={taskDescription}
+                      onChange={(val) => setTaskDescription(val)}
+                      placeholder={taskType === 'text' ? "Enter instructions, routines, formatting with headings/subheadings..." : placeholders[taskType].description}
+                      maxLength={3000}
+                    />
+                  </Box>
 
                   <TextField
                     fullWidth
@@ -846,9 +851,18 @@ const ChamberPage = () => {
                             />
                           </Box>
                           {task.description && (
-                            <Typography variant="caption" sx={{ color: '#B0B0B0', display: 'block', mt: 0.5 }}>
-                              {task.description}
-                            </Typography>
+                            <Typography 
+                              variant="caption" 
+                              sx={{ 
+                                color: '#B0B0B0', 
+                                display: 'block', 
+                                mt: 0.5,
+                                '& ul, & ol': { pl: 2.5, my: 0.5 },
+                                '& p': { m: 0 }
+                              }}
+                              component="div"
+                              dangerouslySetInnerHTML={{ __html: task.description }}
+                            />
                           )}
                         </Box>
                       </Box>
@@ -957,43 +971,33 @@ const ChamberPage = () => {
                 </Select>
               </FormControl>
 
-              {editType === 'text' ? (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="caption" sx={{ color: '#B0B0B0', mb: 1, display: 'block' }}>
+                  {editType === 'text' ? 'Protocol Text / Instructions' : 'Description / Instruction (Optional)'}
+                </Typography>
+                <RichTextEditor
+                  value={editDescription}
+                  onChange={(val) => setEditDescription(val)}
+                  placeholder={editType === 'text' ? "Enter instructions, routines, formatting with headings/subheadings..." : placeholders[editType]?.description || ''}
+                  maxLength={3000}
+                />
+              </Box>
+
+              {editType === 'checklist' && (
                 <TextField
                   fullWidth
+                  required
                   size="small"
-                  label="Protocol Text / Instructions"
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
+                  label="Checklist Items (One item per line)"
+                  value={editChecklistSteps}
+                  onChange={(e) => setEditChecklistSteps(e.target.value)}
                   multiline
                   rows={6}
-                  placeholder={placeholders.text.description}
+                  placeholder="e.g.&#10;Drink 500ml water&#10;Perform joint mobility routine&#10;10 minutes breathwork"
                 />
-              ) : editType === 'checklist' ? (
-                <>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Description / Instruction (Optional)"
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    multiline
-                    rows={2}
-                    placeholder={placeholders.checklist.description}
-                  />
+              )}
 
-                  <TextField
-                    fullWidth
-                    required
-                    size="small"
-                    label="Checklist Items (One item per line)"
-                    value={editChecklistSteps}
-                    onChange={(e) => setEditChecklistSteps(e.target.value)}
-                    multiline
-                    rows={6}
-                    placeholder="e.g.&#10;Drink 500ml water&#10;Perform joint mobility routine&#10;10 minutes breathwork"
-                  />
-                </>
-              ) : (
+              {editType !== 'text' && editType !== 'checklist' && (
                 <>
                   <TextField
                     fullWidth
@@ -1002,17 +1006,6 @@ const ChamberPage = () => {
                     value={editDuration}
                     onChange={(e) => setEditDuration(e.target.value)}
                     placeholder="e.g. 5 min"
-                  />
-
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Description / Instruction (Optional)"
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    multiline
-                    rows={2}
-                    placeholder={placeholders[editType]?.description}
                   />
 
                   <TextField
