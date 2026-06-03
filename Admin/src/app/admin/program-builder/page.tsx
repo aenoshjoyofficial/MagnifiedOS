@@ -123,6 +123,7 @@ const ProgramBuilder = () => {
   const urlProgramId = searchParams.get('id');
   const [programId, setProgramId] = useState<string | null>(urlProgramId);
   const [localModules, setLocalModules] = useState<any[]>([]);
+  const [prevProgramId, setPrevProgramId] = useState<string | null>(null);
 
   const [tempSelectedChamber, setTempSelectedChamber] = useState<{ [day: number]: string }>({});
   const [tempSelectedTask, setTempSelectedTask] = useState<{ [day: number]: string }>({});
@@ -441,7 +442,18 @@ const ProgramBuilder = () => {
           .map((l: any) => l.day_number)
           .filter((d: number) => d > 0)
       )).sort((a, b) => a - b);
-      setDayIndices(existingDays.length > 0 ? existingDays : [1]);
+
+      if (programId !== prevProgramId) {
+        // We switched programs, reset dayIndices completely to the new program's existing days
+        setDayIndices(existingDays.length > 0 ? existingDays : [1]);
+        setPrevProgramId(programId);
+      } else {
+        // We are on the same program, merge existingDays with current dayIndices
+        setDayIndices(prev => {
+          const combined = Array.from(new Set([...prev, ...existingDays])).sort((a, b) => a - b);
+          return combined.length > 0 ? combined : [1];
+        });
+      }
 
       const titles: { [day: number]: string } = {};
       localModules.forEach(m => {
@@ -451,9 +463,10 @@ const ProgramBuilder = () => {
           }
         });
       });
-      setDayTitles(titles);
+      // Merge titles so we don't lose any custom titles edited locally
+      setDayTitles(prev => ({ ...prev, ...titles }));
     }
-  }, [localModules]);
+  }, [localModules, programId, prevProgramId]);
 
   const handleUpdateDayTitle = async (dayNum: number, newTitle: string) => {
     try {
