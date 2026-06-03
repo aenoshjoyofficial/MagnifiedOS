@@ -540,6 +540,27 @@ export const useUploadAsset = () => {
 
       return new Promise<string>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        
+        // Progress watchdog timer to catch stalled connections (e.g. stuck at 0%)
+        let progressTimeout: any = null;
+        const resetWatchdog = () => {
+          if (progressTimeout) clearTimeout(progressTimeout);
+          progressTimeout = setTimeout(() => {
+            console.warn('[Upload Watchdog] Upload stalled at 0% or progress stopped advancing for 15 seconds. Aborting.');
+            xhr.abort();
+          }, 15000); // 15 seconds stall timeout
+        };
+
+        const clearWatchdog = () => {
+          if (progressTimeout) {
+            clearTimeout(progressTimeout);
+            progressTimeout = null;
+          }
+        };
+
+        // Initialize watchdog before opening connection
+        resetWatchdog();
+
         xhr.open('POST', uploadUrl, true);
         
         // Set headers
@@ -552,6 +573,7 @@ export const useUploadAsset = () => {
         // Track upload progress
         if (xhr.upload && onProgress) {
           xhr.upload.onprogress = (event) => {
+            resetWatchdog(); // Reset watchdog timer on every progress tick
             if (event.lengthComputable) {
               const percent = Math.round((event.loaded / event.total) * 100);
               onProgress(percent);
@@ -560,6 +582,7 @@ export const useUploadAsset = () => {
         }
 
         xhr.onload = () => {
+          clearWatchdog();
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               // Parse response
@@ -584,11 +607,18 @@ export const useUploadAsset = () => {
         };
 
         xhr.onerror = () => {
-          reject(new Error('Network error during upload.'));
+          clearWatchdog();
+          reject(new Error('Network error during upload. Please check your internet connection.'));
         };
 
         xhr.ontimeout = () => {
-          reject(new Error('Upload timed out.'));
+          clearWatchdog();
+          reject(new Error('Upload request timed out after 10 minutes.'));
+        };
+
+        xhr.onabort = () => {
+          clearWatchdog();
+          reject(new Error('Upload connection stalled and timed out (no progress for 15 seconds). Please try again.'));
         };
 
         // Set timeout to 10 minutes (600,000 ms)
