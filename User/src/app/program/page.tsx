@@ -70,23 +70,56 @@ const MyProgram = () => {
     return keys;
   }, [completions, taskMap]);
 
-  // A lesson (Day D) is locked if any previous lesson (Day < D) has uncompleted tasks
+  // Time-based calendar tracking using America/New_York (Eastern Time)
+  const startedAt = React.useMemo(() => {
+    return enrollment?.started_at ? new Date(enrollment.started_at) : new Date();
+  }, [enrollment]);
+
+  const daysSinceStart = React.useMemo(() => {
+    if (!enrollment) return 1;
+    
+    const getNYDate = (d: Date) => {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      const parts = formatter.formatToParts(d);
+      const year = parseInt(parts.find(p => p.type === 'year')!.value, 10);
+      const month = parseInt(parts.find(p => p.type === 'month')!.value, 10) - 1; // 0-indexed
+      const day = parseInt(parts.find(p => p.type === 'day')!.value, 10);
+      return new Date(Date.UTC(year, month, day));
+    };
+
+    const startNY = getNYDate(startedAt);
+    const todayNY = getNYDate(new Date());
+    
+    return Math.max(1, Math.floor((todayNY.getTime() - startNY.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  }, [enrollment, startedAt]);
+
+  // A lesson (Day D) is locked if:
+  // 1. D > 1 (Day 1 is always unlocked)
+  // 2. AND D > daysSinceStart (the calendar day has not arrived yet)
+  // 3. AND any task in any previous lesson is not completed (the user hasn't finished prior lessons early)
   const isLessonLocked = React.useCallback((lesson: any) => {
     const dayNum = lesson.day_number;
     if (dayNum <= 1) return false;
     
-    // Find all lessons for days before this one
+    // Time-based unlock: if today is calendar Day >= dayNum, it's automatically unlocked
+    if (dayNum <= daysSinceStart) return false;
+    
+    // Completion-based unlock: check if previous days have uncompleted tasks
     const prevLessons = program?.modules?.flatMap((m: any) => m.lessons || [])
       .filter((l: any) => l.day_number < dayNum) || [];
       
-    // Check if any task in those previous lessons is not completed
     return prevLessons.some((l: any) => {
       const tasks = l.tasks || [];
       if (tasks.length === 0) return false;
       const completed = tasks.filter((t: any) => completedKeys.has(`${l.day_number}_${t.title}`));
       return completed.length < tasks.length;
     });
-  }, [program, completedKeys]);
+  }, [program, completedKeys, daysSinceStart]);
 
   if (isLoading) {
     return (

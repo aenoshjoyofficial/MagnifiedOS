@@ -113,8 +113,6 @@ const TodayPractice = () => {
     }, 0) || program.duration_days || 30;
   }, [program]);
 
-  const viewedDay = Math.min(dayParam ? parseInt(dayParam, 10) : daysSinceStart, totalDays);
-
   const allLessons = React.useMemo(() => {
     return program?.modules?.flatMap((m: any) => 
       (m.lessons || []).map((l: any) => ({
@@ -125,23 +123,9 @@ const TodayPractice = () => {
     ) || [];
   }, [program]);
 
-  const currentLesson = React.useMemo(() => {
-    if (allLessons.length === 0) return null;
-    return allLessons.find((l: any) => l.day_number === viewedDay) || allLessons.find((l: any) => l.day_number === 1) || allLessons[allLessons.length - 1];
-  }, [allLessons, viewedDay]);
-
-  const tasks = React.useMemo(() => {
-    return allLessons
-      .filter((l: any) => l.day_number === viewedDay)
-      .flatMap((l: any) => (l.tasks || []).map((t: any) => ({
-        ...t,
-        moduleTitle: l.moduleTitle,
-        moduleId: l.moduleId
-      })));
-  }, [allLessons, viewedDay]);
   const completions = enrollment?.task_completions || [];
 
-  const { completedTasks, isDayComplete, completedKeys } = React.useMemo(() => {
+  const completedKeys = React.useMemo(() => {
     const taskMap: Record<string, { title: string; dayNumber: number }> = {};
     program?.modules?.forEach((mod: any) => {
       mod.lessons?.forEach((les: any) => {
@@ -159,15 +143,75 @@ const TodayPractice = () => {
       }
     });
 
-    const list = tasks.filter((t: any) => keys.has(`${viewedDay}_${t.title}`));
+    return keys;
+  }, [program, completions]);
+
+  const viewedDay = React.useMemo(() => {
+    if (dayParam) return Math.min(parseInt(dayParam, 10), totalDays);
+    
+    if (allLessons.length === 0) return Math.min(daysSinceStart, totalDays);
+
+    const sortedLessons = [...allLessons].sort((a: any, b: any) => (a.day_number || 0) - (b.day_number || 0));
+
+    // Lock helper: A lesson D is locked if D > daysSinceStart AND any previous day is incomplete
+    const isLocked = (dayNum: number) => {
+      if (dayNum <= 1) return false;
+      if (dayNum <= daysSinceStart) return false;
+      const prevLessons = sortedLessons.filter((l: any) => l.day_number < dayNum);
+      return prevLessons.some((l: any) => {
+        const tasks = l.tasks || [];
+        if (tasks.length === 0) return false;
+        const completed = tasks.filter((t: any) => completedKeys.has(`${l.day_number}_${t.title}`));
+        return completed.length < tasks.length;
+      });
+    };
+
+    // Find the first uncompleted unlocked day
+    const firstIncompleteUnlocked = sortedLessons.find((l: any) => {
+      if (isLocked(l.day_number)) return false;
+      const tasks = l.tasks || [];
+      if (tasks.length === 0) return false;
+      const completed = tasks.filter((t: any) => completedKeys.has(`${l.day_number}_${t.title}`));
+      return completed.length < tasks.length;
+    });
+
+    if (firstIncompleteUnlocked) {
+      return firstIncompleteUnlocked.day_number;
+    }
+
+    // Default to highest unlocked day if all unlocked days are completed
+    const unlockedLessons = sortedLessons.filter((l: any) => !isLocked(l.day_number));
+    if (unlockedLessons.length > 0) {
+      return unlockedLessons[unlockedLessons.length - 1].day_number;
+    }
+
+    return Math.min(daysSinceStart, totalDays);
+  }, [dayParam, allLessons, daysSinceStart, totalDays, completedKeys]);
+
+  const currentLesson = React.useMemo(() => {
+    if (allLessons.length === 0) return null;
+    return allLessons.find((l: any) => l.day_number === viewedDay) || allLessons.find((l: any) => l.day_number === 1) || allLessons[allLessons.length - 1];
+  }, [allLessons, viewedDay]);
+
+  const tasks = React.useMemo(() => {
+    return allLessons
+      .filter((l: any) => l.day_number === viewedDay)
+      .flatMap((l: any) => (l.tasks || []).map((t: any) => ({
+        ...t,
+        moduleTitle: l.moduleTitle,
+        moduleId: l.moduleId
+      })));
+  }, [allLessons, viewedDay]);
+
+  const { completedTasks, isDayComplete } = React.useMemo(() => {
+    const list = tasks.filter((t: any) => completedKeys.has(`${viewedDay}_${t.title}`));
     const complete = list.length === tasks.length && tasks.length > 0;
     
     return {
       completedTasks: list,
-      isDayComplete: complete,
-      completedKeys: keys
+      isDayComplete: complete
     };
-  }, [program, completions, tasks, viewedDay]);
+  }, [tasks, completedKeys, viewedDay]);
 
   React.useEffect(() => {
     if (enrollment) {

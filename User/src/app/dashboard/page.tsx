@@ -127,7 +127,7 @@ const Dashboard = () => {
   const currentStreak = calculateStreak();
   
   // Build a map of taskId to title and dayNumber, and get unique tasks
-  const { totalTasks, completedCount } = React.useMemo(() => {
+  const { totalTasks, completedCount, completedKeys } = React.useMemo(() => {
     const taskMap: Record<string, { title: string; dayNumber: number }> = {};
     const allTaskKeys = new Set<string>();
     
@@ -153,7 +153,8 @@ const Dashboard = () => {
     
     return {
       totalTasks: allTaskKeys.size || 1, // Fallback to avoid division by zero
-      completedCount: completedKeys.size
+      completedCount: completedKeys.size,
+      completedKeys
     };
   }, [program, completions]);
 
@@ -173,7 +174,7 @@ const Dashboard = () => {
     return Math.max(acc, maxModDay);
   }, 0) || program?.duration_days || 30;
 
-  // Current Day: Based on latest completed task's lesson day or days since start
+  // Current Day: Based on first uncompleted unlocked day, or calendar days since start
   const startedAt = enrollment?.started_at ? new Date(enrollment.started_at) : new Date();
   const calendarDays = (() => {
     if (!enrollment) return 1;
@@ -194,9 +195,49 @@ const Dashboard = () => {
     const todayNY = getNYDate(new Date());
     return Math.max(1, Math.floor((todayNY.getTime() - startNY.getTime()) / (1000 * 60 * 60 * 24)) + 1);
   })();
-  
-  // We'll use calendar days as the "current day" but capped at total days
-  const currentDay = Math.min(calendarDays, totalDays);
+
+  const currentDay = React.useMemo(() => {
+    if (!program?.modules) return Math.min(calendarDays, totalDays);
+
+    const allLessons = program.modules.flatMap((m: any) => m.lessons || [])
+      .sort((a: any, b: any) => (a.day_number || 0) - (b.day_number || 0)) || [];
+
+    if (allLessons.length === 0) return Math.min(calendarDays, totalDays);
+
+    // Lock helper: A lesson D is locked if D > calendarDays AND any previous day is incomplete
+    const isLocked = (dayNum: number) => {
+      if (dayNum <= 1) return false;
+      if (dayNum <= calendarDays) return false;
+      const prevLessons = allLessons.filter((l: any) => l.day_number < dayNum);
+      return prevLessons.some((l: any) => {
+        const tasks = l.tasks || [];
+        if (tasks.length === 0) return false;
+        const completed = tasks.filter((t: any) => completedKeys.has(`${l.day_number}_${t.title}`));
+        return completed.length < tasks.length;
+      });
+    };
+
+    // Find the first uncompleted unlocked day
+    const firstIncompleteUnlocked = allLessons.find((l: any) => {
+      if (isLocked(l.day_number)) return false;
+      const tasks = l.tasks || [];
+      if (tasks.length === 0) return false;
+      const completed = tasks.filter((t: any) => completedKeys.has(`${l.day_number}_${t.title}`));
+      return completed.length < tasks.length;
+    });
+
+    if (firstIncompleteUnlocked) {
+      return firstIncompleteUnlocked.day_number;
+    }
+
+    // Default to highest unlocked day if all unlocked days are completed
+    const unlockedLessons = allLessons.filter((l: any) => !isLocked(l.day_number));
+    if (unlockedLessons.length > 0) {
+      return unlockedLessons[unlockedLessons.length - 1].day_number;
+    }
+
+    return Math.min(calendarDays, totalDays);
+  }, [program, calendarDays, totalDays, completedKeys]);
 
   return (
     <Box sx={{ py: 1 }}>
@@ -282,7 +323,7 @@ const Dashboard = () => {
 
                 <Button 
                   component={Link}
-                  to="/today"
+                  to={`/today?day=${currentDay}`}
                   variant="contained" 
                   color="primary"
                   startIcon={<Play size={18} fill="currentColor" />}
