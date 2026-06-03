@@ -95,7 +95,14 @@ app.get('/health', (req, res) => {
 // Mounting under /admin so express.static will check inside dist/admin for files requested relative to /admin
 app.use('/admin', express.static(path.join(__dirname, 'dist/admin'), {
   maxAge: '1d', // Cache static assets for 1 day in production
-  etag: true
+  etag: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
 }));
 
 // Fallback for Admin SPA routing: send index.html for any unmatched /admin/* paths
@@ -105,13 +112,26 @@ app.get('/admin/*', (req, res, next) => {
   if (isFileRequest) {
     return next();
   }
-  res.sendFile(path.join(__dirname, 'dist/admin/index.html'));
+  res.sendFile(path.join(__dirname, 'dist/admin/index.html'), {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
+  });
 });
 
 // Serve User app static assets
 app.use(express.static(path.join(__dirname, 'dist'), {
   maxAge: '1d',
-  etag: true
+  etag: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
 }));
 
 // Fallback for User SPA routing: send index.html for all other unmatched paths
@@ -121,7 +141,13 @@ app.get('*', (req, res) => {
   if (isFileRequest) {
     return res.status(404).send('Not Found');
   }
-  res.sendFile(path.join(__dirname, 'dist/index.html'));
+  res.sendFile(path.join(__dirname, 'dist/index.html'), {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
+  });
 });
 
 // Start listening
