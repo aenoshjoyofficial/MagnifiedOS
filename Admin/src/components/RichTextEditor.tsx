@@ -61,17 +61,108 @@ const RichTextEditor = ({ value, onChange, onBlur, maxLength = 1000, placeholder
     }
   };
 
-  // Custom paste handler to strip styling and enforce word limit
+  // Helper to clean up pasted HTML content by preserving formatting tags but stripping styles and classes
+  const cleanPastedHtml = (htmlString: string) => {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlString, 'text/html');
+      
+      const cleanNode = (node: Node): string => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          return node.textContent
+            ? node.textContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            : '';
+        }
+        
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as HTMLElement;
+          const tagName = el.tagName.toLowerCase();
+          
+          const allowedTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'b', 'strong', 'i', 'em', 'u', 'span', 'br', 'a'];
+          if (!allowedTags.includes(tagName)) {
+            let childrenHtml = '';
+            for (let i = 0; i < el.childNodes.length; i++) {
+              childrenHtml += cleanNode(el.childNodes[i]);
+            }
+            return childrenHtml;
+          }
+          
+          if (tagName === 'span') {
+            let childrenHtml = '';
+            for (let i = 0; i < el.childNodes.length; i++) {
+              childrenHtml += cleanNode(el.childNodes[i]);
+            }
+            return childrenHtml;
+          }
+          
+          let attrStr = '';
+          if (tagName === 'a') {
+            const href = el.getAttribute('href');
+            if (href) {
+              attrStr = ` href="${href}" target="_blank" rel="noopener noreferrer"`;
+            }
+          }
+          
+          let childrenHtml = '';
+          for (let i = 0; i < el.childNodes.length; i++) {
+            childrenHtml += cleanNode(el.childNodes[i]);
+          }
+          
+          if (tagName === 'br') {
+            return '<br>';
+          }
+          
+          return `<${tagName}${attrStr}>${childrenHtml}</${tagName}>`;
+        }
+        
+        return '';
+      };
+      
+      let result = '';
+      const body = doc.body;
+      for (let i = 0; i < body.childNodes.length; i++) {
+        result += cleanNode(body.childNodes[i]);
+      }
+      return result;
+    } catch (e) {
+      console.error('Error cleaning pasted HTML:', e);
+      return htmlString;
+    }
+  };
+
+  // Custom paste handler to clean up styles while preserving structure/formatting
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     e.preventDefault();
+    const html = e.clipboardData.getData('text/html');
     const text = e.clipboardData.getData('text/plain');
-    const words = text.trim().split(/\s+/);
-    const wordsLeft = maxLength - wordCount;
     
-    if (wordsLeft <= 0) return;
-    
-    const textToInsert = words.slice(0, wordsLeft).join(' ');
-    document.execCommand('insertText', false, textToInsert);
+    // Check word count limit
+    const pastedWordCount = getWordCount(text);
+    if (maxLength && (wordCount + pastedWordCount) > maxLength) {
+      alert(`Cannot paste: the content exceeds the maximum limit of ${maxLength} words.`);
+      return;
+    }
+
+    let contentToInsert = '';
+    if (html) {
+      contentToInsert = cleanPastedHtml(html);
+    } else if (text) {
+      // Convert plain text newlines into clean paragraph elements
+      contentToInsert = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .split(/\r?\n/)
+        .map(line => line.trim() ? `<p>${line}</p>` : '<br>')
+        .join('');
+    }
+
+    if (contentToInsert) {
+      document.execCommand('insertHTML', false, contentToInsert);
+      if (editorRef.current) {
+        onChange(editorRef.current.innerHTML);
+      }
+    }
   };
 
   return (
