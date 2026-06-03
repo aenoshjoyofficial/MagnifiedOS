@@ -56,7 +56,8 @@ import {
   Users,
   FileText,
   Award,
-  UserCheck
+  UserCheck,
+  Copy
 } from 'lucide-react';
 import {
   useSaveProgram,
@@ -90,6 +91,7 @@ import {
   matchChamberKey
 } from '@/lib/chambersData';
 import { ProgramImportModal } from '@/components/program-builder/ProgramImportModal';
+import { ProgramCloneModal } from '@/components/program-builder/ProgramCloneModal';
 
 const parseRoutineFromHtml = (html: string) => {
   try {
@@ -109,6 +111,7 @@ const ProgramBuilder = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('settings');
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isCloneOpen, setIsCloneOpen] = useState(false);
   const saveProgramMutation = useSaveProgram();
   const saveModuleMutation = useSaveModule();
   const saveLessonMutation = useSaveLesson();
@@ -1408,6 +1411,15 @@ const ProgramBuilder = () => {
     }
   };
 
+  const handleCloneSuccess = () => {
+    setActiveTab('modules');
+    setNotification({
+      open: true,
+      message: 'Program cloned successfully! All modules, lessons, and tasks have been copied.',
+      severity: 'success'
+    });
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
@@ -1520,6 +1532,21 @@ const ProgramBuilder = () => {
           >
             Import Program
           </Button>
+          {programId && (
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => setIsCloneOpen(true)}
+              startIcon={<Copy size={14} />}
+              sx={{
+                color: 'var(--emerald-primary)',
+                borderColor: 'var(--emerald-mid)',
+                '&:hover': { borderColor: 'var(--emerald-light)', backgroundColor: 'var(--emerald-dark)' }
+              }}
+            >
+              Clone Program
+            </Button>
+          )}
           {programId && (
             <Stack direction="row" spacing={2} sx={{ ml: 'auto', alignItems: 'center' }}>
               {localModules?.length === 0 && (
@@ -2094,6 +2121,13 @@ const ProgramBuilder = () => {
         onClose={() => setIsImportOpen(false)}
         programId={programId}
         onImportSuccess={handleImportSuccess}
+      />
+
+      <ProgramCloneModal
+        open={isCloneOpen}
+        onClose={() => setIsCloneOpen(false)}
+        targetProgramId={programId}
+        onCloneSuccess={handleCloneSuccess}
       />
 
       <Dialog
