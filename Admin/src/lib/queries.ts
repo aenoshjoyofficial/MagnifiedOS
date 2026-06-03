@@ -523,35 +523,80 @@ export const useDashboardStats = () => {
  */
 export const useUploadAsset = () => {
   return useMutation({
-    mutationFn: async ({ file, bucket, path }: { file: File, bucket: string, path: string }) => {
+    mutationFn: async ({ file, bucket, path, onProgress }: { file: File, bucket: string, path: string, onProgress?: (percent: number) => void }) => {
       // Warm up the session and ensure the token is refreshed/valid before uploading
+      let accessToken = '';
       try {
-        await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
+        accessToken = session?.access_token || '';
       } catch (authErr) {
         console.error("Error refreshing session before upload:", authErr);
       }
 
-      const uploadPromise = supabase.storage
-        .from(bucket)
-        .upload(path, file, {
-          upsert: true,
-          cacheControl: '3600'
-        });
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-      const timeoutPromise = new Promise<{ data: any, error: any }>((_, reject) =>
-        setTimeout(() => reject(new Error('Upload request timed out after 10 minutes. Please check your network connection.')), 600000)
-      );
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${path}`;
 
-      const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
-      
-      if (error) throw error;
+      return new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', uploadUrl, true);
+        
+        // Set headers
+        xhr.setRequestHeader('apikey', supabaseAnonKey);
+        if (accessToken) {
+          xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+        }
+        xhr.setRequestHeader('x-upsert', 'true');
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(data.path);
-      
-      return publicUrl;
+        // Track upload progress
+        if (xhr.upload && onProgress) {
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const percent = Math.round((event.loaded / event.total) * 100);
+              onProgress(percent);
+            }
+          };
+        }
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              // Parse response
+              const response = JSON.parse(xhr.responseText);
+              const key = response.Key || response.path || path;
+              // Get public URL
+              const { data: { publicUrl } } = supabase.storage
+                .from(bucket)
+                .getPublicUrl(key);
+              resolve(publicUrl);
+            } catch (err) {
+              reject(new Error('Failed to parse upload response.'));
+            }
+          } else {
+            let errorMsg = `Upload failed with status code ${xhr.status}`;
+            try {
+              const response = JSON.parse(xhr.responseText);
+              errorMsg = response.message || response.error || errorMsg;
+            } catch (_) {}
+            reject(new Error(errorMsg));
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error('Network error during upload.'));
+        };
+
+        xhr.ontimeout = () => {
+          reject(new Error('Upload timed out.'));
+        };
+
+        // Set timeout to 10 minutes (600,000 ms)
+        xhr.timeout = 600000;
+
+        // Send the file directly as binary body
+        xhr.send(file);
+      });
     }
   });
 };

@@ -19,7 +19,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Chip
+  Chip,
+  LinearProgress
 } from '@mui/material';
 import { 
   ArrowLeft, 
@@ -95,6 +96,7 @@ const ChamberPage = () => {
   const [editDuration, setEditDuration] = useState('');
   const [editChecklistSteps, setEditChecklistSteps] = useState('');
   const [editIsUploading, setEditIsUploading] = useState(false);
+  const [editUploadProgress, setEditUploadProgress] = useState<number | null>(null);
 
   // Placeholders mapping based on task type
   const placeholders = {
@@ -139,13 +141,29 @@ const ChamberPage = () => {
   const deleteTaskMutation = useDeleteTask();
   const uploadAssetMutation = useUploadAsset();
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   // Handle local file uploads
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 50 * 1024 * 1024) {
+      const confirmUpload = window.confirm(
+        `Warning: The file you selected is ${(file.size / 1024 / 1024).toFixed(1)} MB.\n\n` +
+        `Supabase Free Tier projects have a strict, project-wide limit of 50 MB per file upload, regardless of bucket settings.\n\n` +
+        `• If your Supabase project is on the Free Tier, this upload will fail.\n` +
+        `• If you have upgraded your Supabase project to the Pro Tier, click OK to proceed.\n\n` +
+        `Do you want to proceed with the upload?`
+      );
+      if (!confirmUpload) {
+        e.target.value = '';
+        return;
+      }
+    }
+
     setIsUploading(true);
+    setUploadProgress(0);
     try {
       const fileExt = file.name.split('.').pop() || '';
       const fileName = `chamber-task-${Date.now()}.${fileExt}`;
@@ -155,7 +173,10 @@ const ChamberPage = () => {
       const publicUrl = await uploadAssetMutation.mutateAsync({
         file,
         bucket,
-        path: storagePath
+        path: storagePath,
+        onProgress: (percent) => {
+          setUploadProgress(percent);
+        }
       });
 
       setContentUrl(publicUrl);
@@ -171,12 +192,19 @@ const ChamberPage = () => {
       console.error('Upload failed:', err);
       const errMsg = err?.message || err?.error_description || String(err);
       if (errMsg.includes('exceeded the maximum allowed size') || errMsg.includes('exceed')) {
-        alert(`Upload failed: The file size (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the maximum allowed size of your Supabase storage bucket "program-assets".\n\nTo resolve this:\n1. Open your Supabase Dashboard.\n2. Navigate to Storage > Buckets > "program-assets".\n3. Click "Edit Bucket" (or the triple-dot menu next to the bucket name).\n4. Under "Maximum File Size", change the limit to a higher value (e.g., 50MB or 100MB).\n5. Save the configuration and retry the upload.`);
+        alert(
+          `Upload failed: The file size (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the maximum allowed size.\n\n` +
+          `IMPORTANT: While you updated the bucket limit to 500 MB in your Supabase dashboard, Supabase Free Tier projects have a strict project-level quota of 50 MB per file.\n\n` +
+          `To fix this:\n` +
+          `1. Upgrade your Supabase project from the Free Tier to the Pro Tier ($25/month) in the Supabase Dashboard, OR\n` +
+          `2. Compress your media file (audio/video) to be under 50 MB before uploading.`
+        );
       } else {
         alert(`Upload failed: ${errMsg}`);
       }
     } finally {
       setIsUploading(false);
+      setUploadProgress(null);
       e.target.value = '';
     }
   };
@@ -409,7 +437,22 @@ const ChamberPage = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 50 * 1024 * 1024) {
+      const confirmUpload = window.confirm(
+        `Warning: The file you selected is ${(file.size / 1024 / 1024).toFixed(1)} MB.\n\n` +
+        `Supabase Free Tier projects have a strict, project-wide limit of 50 MB per file upload, regardless of bucket settings.\n\n` +
+        `• If your Supabase project is on the Free Tier, this upload will fail.\n` +
+        `• If you have upgraded your Supabase project to the Pro Tier, click OK to proceed.\n\n` +
+        `Do you want to proceed with the upload?`
+      );
+      if (!confirmUpload) {
+        e.target.value = '';
+        return;
+      }
+    }
+
     setEditIsUploading(true);
+    setEditUploadProgress(0);
     try {
       const fileExt = file.name.split('.').pop() || '';
       const fileName = `chamber-task-${Date.now()}.${fileExt}`;
@@ -419,7 +462,10 @@ const ChamberPage = () => {
       const publicUrl = await uploadAssetMutation.mutateAsync({
         file,
         bucket,
-        path: storagePath
+        path: storagePath,
+        onProgress: (percent) => {
+          setEditUploadProgress(percent);
+        }
       });
 
       // Update both core URL state and the visible UI Resource URL field immediately
@@ -437,12 +483,19 @@ const ChamberPage = () => {
       console.error('Upload failed:', err);
       const errMsg = err?.message || err?.error_description || String(err);
       if (errMsg.includes('exceeded the maximum allowed size') || errMsg.includes('exceed')) {
-        alert(`Upload failed: The file size (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the maximum allowed size of your Supabase storage bucket "program-assets".\n\nTo resolve this:\n1. Open your Supabase Dashboard.\n2. Navigate to Storage > Buckets > "program-assets".\n3. Click "Edit Bucket" (or the triple-dot menu next to the bucket name).\n4. Under "Maximum File Size", change the limit to a higher value (e.g., 50MB or 100MB).\n5. Save the configuration and retry the upload.`);
+        alert(
+          `Upload failed: The file size (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the maximum allowed size.\n\n` +
+          `IMPORTANT: While you updated the bucket limit to 500 MB in your Supabase dashboard, Supabase Free Tier projects have a strict project-level quota of 50 MB per file.\n\n` +
+          `To fix this:\n` +
+          `1. Upgrade your Supabase project from the Free Tier to the Pro Tier ($25/month) in the Supabase Dashboard, OR\n` +
+          `2. Compress your media file (audio/video) to be under 50 MB before uploading.`
+        );
       } else {
         alert(`Upload failed: ${errMsg}`);
       }
     } finally {
       setEditIsUploading(false);
+      setEditUploadProgress(null);
       e.target.value = '';
     }
   };
@@ -754,32 +807,39 @@ const ChamberPage = () => {
                   />
 
                   {taskType !== 'text' && taskType !== 'checklist' && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Button
-                        variant="outlined"
-                        component="label"
-                        startIcon={isUploading ? <CircularProgress size={16} /> : <Upload size={16} />}
-                        disabled={isUploading}
-                        sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}
-                      >
-                        {isUploading ? 'Uploading...' : `Upload ${taskType.toUpperCase()} File`}
-                        <input
-                          type="file"
-                          hidden
-                          onChange={handleFileChange}
-                          accept={
-                            taskType === 'audio' ? 'audio/*' :
-                            taskType === 'video' ? 'video/*' :
-                            taskType === 'image' ? 'image/*' :
-                            taskType === 'pdf' ? 'application/pdf' :
-                            '*/*'
-                          }
-                        />
-                      </Button>
-                      {contentUrl && (
-                        <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 600 }}>
-                          ✓ File Attached
-                        </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Button
+                          variant="outlined"
+                          component="label"
+                          startIcon={isUploading ? <CircularProgress size={16} /> : <Upload size={16} />}
+                          disabled={isUploading}
+                          sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}
+                        >
+                          {isUploading ? `Uploading... ${uploadProgress !== null ? `(${uploadProgress}%)` : ''}` : `Upload ${taskType.toUpperCase()} File`}
+                          <input
+                            type="file"
+                            hidden
+                            onChange={handleFileChange}
+                            accept={
+                              taskType === 'audio' ? 'audio/*' :
+                              taskType === 'video' ? 'video/*' :
+                              taskType === 'image' ? 'image/*' :
+                              taskType === 'pdf' ? 'application/pdf' :
+                              '*/*'
+                            }
+                          />
+                        </Button>
+                        {contentUrl && (
+                          <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 600 }}>
+                            ✓ File Attached
+                          </Typography>
+                        )}
+                      </Box>
+                      {isUploading && uploadProgress !== null && (
+                        <Box sx={{ width: '100%', mt: 0.5 }}>
+                          <LinearProgress variant="determinate" value={uploadProgress} sx={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.08)', '& .MuiLinearProgress-bar': { backgroundColor: 'var(--emerald-mid)' } }} />
+                        </Box>
                       )}
                     </Box>
                   )}
@@ -1033,32 +1093,39 @@ const ChamberPage = () => {
                     placeholder="e.g. https://youtube.com/watch?v=..."
                   />
 
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Button
-                      variant="outlined"
-                      component="label"
-                      startIcon={editIsUploading ? <CircularProgress size={16} /> : <Upload size={16} />}
-                      disabled={editIsUploading}
-                      sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}
-                    >
-                      {editIsUploading ? 'Uploading...' : `Upload New ${editType.toUpperCase()} File`}
-                      <input
-                        type="file"
-                        hidden
-                        onChange={handleEditFileChange}
-                        accept={
-                          editType === 'audio' ? 'audio/*' :
-                          editType === 'video' ? 'video/*' :
-                          editType === 'image' ? 'image/*' :
-                          editType === 'pdf' ? 'application/pdf' :
-                          '*/*'
-                        }
-                      />
-                    </Button>
-                    {editContentUrl && (
-                      <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 600 }}>
-                        ✓ File Attached
-                      </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Button
+                        variant="outlined"
+                        component="label"
+                        startIcon={editIsUploading ? <CircularProgress size={16} /> : <Upload size={16} />}
+                        disabled={editIsUploading}
+                        sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}
+                      >
+                        {editIsUploading ? `Uploading... ${editUploadProgress !== null ? `(${editUploadProgress}%)` : ''}` : `Upload New ${editType.toUpperCase()} File`}
+                        <input
+                          type="file"
+                          hidden
+                          onChange={handleEditFileChange}
+                          accept={
+                            editType === 'audio' ? 'audio/*' :
+                            editType === 'video' ? 'video/*' :
+                            editType === 'image' ? 'image/*' :
+                            editType === 'pdf' ? 'application/pdf' :
+                            '*/*'
+                          }
+                        />
+                      </Button>
+                      {editContentUrl && (
+                        <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 600 }}>
+                          ✓ File Attached
+                        </Typography>
+                      )}
+                    </Box>
+                    {editIsUploading && editUploadProgress !== null && (
+                      <Box sx={{ width: '100%', mt: 0.5 }}>
+                        <LinearProgress variant="determinate" value={editUploadProgress} sx={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.08)', '& .MuiLinearProgress-bar': { backgroundColor: 'var(--emerald-mid)' } }} />
+                      </Box>
                     )}
                   </Box>
                 </>

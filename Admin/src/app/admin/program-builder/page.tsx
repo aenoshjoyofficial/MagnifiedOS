@@ -1018,6 +1018,15 @@ const ProgramBuilder = () => {
   };
 
   const handleCoverImageUpload = async (file: File) => {
+    if (file.size > 50 * 1024 * 1024) {
+      alert(
+        `Warning: The file you selected is ${(file.size / 1024 / 1024).toFixed(1)} MB.\n\n` +
+        `Supabase Free Tier projects have a strict, project-wide limit of 50 MB per file upload, regardless of bucket settings.\n\n` +
+        `Please choose an image file under 50 MB.`
+      );
+      return;
+    }
+
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `cover-${programId || 'new'}-${Date.now()}.${fileExt}`;
@@ -1037,9 +1046,18 @@ const ProgramBuilder = () => {
       }
 
       setNotification({ open: true, message: 'Cover image uploaded!', severity: 'success' });
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setNotification({ open: true, message: 'Cover upload failed.', severity: 'error' });
+      const errMsg = err?.message || err?.error_description || String(err);
+      if (errMsg.includes('exceeded the maximum allowed size') || errMsg.includes('exceed')) {
+        setNotification({ 
+          open: true, 
+          message: 'Upload failed: File size exceeds the 50 MB Supabase Free Tier limit.', 
+          severity: 'error' 
+        });
+      } else {
+        setNotification({ open: true, message: `Cover upload failed: ${errMsg}`, severity: 'error' });
+      }
     }
   };
 
