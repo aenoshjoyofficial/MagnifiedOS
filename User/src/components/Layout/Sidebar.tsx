@@ -36,7 +36,6 @@ const navItems = [
   { label: "Today's Practice", path: '/today', icon: Star, highlight: true },
   { label: 'Progress', path: '/progress', icon: LineChart },
   { label: 'Sessions', path: '/sessions', icon: Calendar },
-  { label: 'Community', path: '/community', icon: Users },
 ];
 
 const Sidebar = () => {

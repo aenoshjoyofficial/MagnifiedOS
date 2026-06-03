@@ -14,7 +14,6 @@ import TodayPracticePage from './app/today/page';
 import ProgressPage from './app/progress/page';
 import SessionsPage from './app/sessions/page';
 import ProfilePage from './app/profile/page';
-import CommunityPage from './app/community/page';
 import SettingsPage from './app/settings/page';
 
 const App = () => {
@@ -35,7 +34,6 @@ const App = () => {
           <Route path="/progress" element={<AuthGuard><ProgressPage /></AuthGuard>} />
           <Route path="/sessions" element={<AuthGuard><SessionsPage /></AuthGuard>} />
           <Route path="/profile" element={<AuthGuard><ProfilePage /></AuthGuard>} />
-          <Route path="/community" element={<AuthGuard><CommunityPage /></AuthGuard>} />
           <Route path="/settings" element={<AuthGuard><SettingsPage /></AuthGuard>} />
 
           {/* Catch all - Redirect to dashboard */}
