@@ -539,7 +539,7 @@ export const useUploadAsset = () => {
         });
 
       const timeoutPromise = new Promise<{ data: any, error: any }>((_, reject) =>
-        setTimeout(() => reject(new Error('Upload request timed out after 60 seconds. Please check your network connection or Supabase bucket permission policies.')), 60000)
+        setTimeout(() => reject(new Error('Upload request timed out after 10 minutes. Please check your network connection.')), 600000)
       );
 
       const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
