@@ -585,13 +585,10 @@ export const useUploadAsset = () => {
           clearWatchdog();
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
-              // Parse response
-              const response = JSON.parse(xhr.responseText);
-              const key = response.Key || response.path || path;
-              // Get public URL
+              // Get public URL using the original path parameter to avoid double bucket segments
               const { data: { publicUrl } } = supabase.storage
                 .from(bucket)
-                .getPublicUrl(key);
+                .getPublicUrl(path);
               resolve(publicUrl);
             } catch (err) {
               reject(new Error('Failed to parse upload response.'));
