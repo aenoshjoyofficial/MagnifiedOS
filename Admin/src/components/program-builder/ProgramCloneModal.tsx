@@ -170,7 +170,6 @@ export const ProgramCloneModal: React.FC<ProgramCloneModalProps> = ({
                   description: t.description,
                   type: t.type,
                   content: t.content,
-                  duration_seconds: t.duration_seconds,
                   order_index: t.order_index
                 });
               });
