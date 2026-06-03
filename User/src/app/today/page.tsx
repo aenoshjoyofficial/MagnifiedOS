@@ -86,10 +86,17 @@ const TodayPractice = () => {
     if (!enrollment) return 1;
     
     const getNYDate = (d: Date) => {
-      const estStr = d.toLocaleString("en-US", { timeZone: "America/New_York" });
-      const nyDate = new Date(estStr);
-      nyDate.setHours(0, 0, 0, 0);
-      return nyDate;
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      const parts = formatter.formatToParts(d);
+      const year = parseInt(parts.find(p => p.type === 'year')!.value, 10);
+      const month = parseInt(parts.find(p => p.type === 'month')!.value, 10) - 1; // 0-indexed
+      const day = parseInt(parts.find(p => p.type === 'day')!.value, 10);
+      return new Date(Date.UTC(year, month, day));
     };
 
     const startNY = getNYDate(startedAt);

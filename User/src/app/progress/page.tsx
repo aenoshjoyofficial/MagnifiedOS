@@ -54,17 +54,32 @@ const Progress = () => {
   const calculateStreak = () => {
     if (completions.length === 0) return 0;
     
-    const formatNYDate = (d: Date) => {
-      const estStr = d.toLocaleDateString("en-US", { timeZone: "America/New_York" });
-      const [m, day, y] = estStr.split('/');
-      return `${y}-${m.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    const getNYParts = (d: Date) => {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      const parts = formatter.formatToParts(d);
+      const year = parts.find(p => p.type === 'year')!.value;
+      const month = parts.find(p => p.type === 'month')!.value;
+      const day = parts.find(p => p.type === 'day')!.value;
+      return {
+        year: parseInt(year, 10),
+        month: parseInt(month, 10),
+        day: parseInt(day, 10),
+        formatted: `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+      };
     };
 
     const getNYMidnight = (d: Date) => {
-      const estStr = d.toLocaleString("en-US", { timeZone: "America/New_York" });
-      const nyDate = new Date(estStr);
-      nyDate.setHours(0, 0, 0, 0);
-      return nyDate;
+      const parts = getNYParts(d);
+      return new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+    };
+
+    const formatNYDate = (d: Date) => {
+      return getNYParts(d).formatted;
     };
 
     // Get unique calendar dates (YYYY-MM-DD) in Eastern Time
@@ -78,7 +93,7 @@ const Progress = () => {
     const today = formatNYDate(todayNYDate);
 
     const yesterdayNYDate = new Date(todayNYDate);
-    yesterdayNYDate.setDate(todayNYDate.getDate() - 1);
+    yesterdayNYDate.setUTCDate(todayNYDate.getUTCDate() - 1);
     const yesterday = formatNYDate(yesterdayNYDate);
     
     // If the latest completion wasn't today or yesterday in Eastern Time, streak is 0
@@ -86,10 +101,10 @@ const Progress = () => {
     
     // Count consecutive days going backward from the most recent completion
     let streak = 0;
-    const baseDate = new Date(dates[0] + 'T00:00:00');
+    const baseDate = new Date(dates[0] + 'T00:00:00Z'); // Parse as UTC to avoid local timezone offset shifts
     for (let i = 0; i < dates.length; i++) {
       const expectedDate = new Date(baseDate);
-      expectedDate.setDate(baseDate.getDate() - i);
+      expectedDate.setUTCDate(baseDate.getUTCDate() - i);
       const expected = expectedDate.toISOString().split('T')[0];
 
       if (dates[i] === expected) {

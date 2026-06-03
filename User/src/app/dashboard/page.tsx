@@ -61,16 +61,31 @@ const Dashboard = () => {
     if (!completions || completions.length === 0) return 0;
 
     const formatNYDate = (d: Date) => {
-      const estStr = d.toLocaleDateString("en-US", { timeZone: "America/New_York" });
-      const [m, day, y] = estStr.split('/');
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      const parts = formatter.formatToParts(d);
+      const y = parts.find(p => p.type === 'year')!.value;
+      const m = parts.find(p => p.type === 'month')!.value;
+      const day = parts.find(p => p.type === 'day')!.value;
       return `${y}-${m.padStart(2, '0')}-${day.padStart(2, '0')}`;
     };
 
     const getNYMidnight = (d: Date) => {
-      const estStr = d.toLocaleString("en-US", { timeZone: "America/New_York" });
-      const nyDate = new Date(estStr);
-      nyDate.setHours(0, 0, 0, 0);
-      return nyDate;
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      const parts = formatter.formatToParts(d);
+      const year = parseInt(parts.find(p => p.type === 'year')!.value, 10);
+      const month = parseInt(parts.find(p => p.type === 'month')!.value, 10) - 1; // 0-indexed
+      const day = parseInt(parts.find(p => p.type === 'day')!.value, 10);
+      return new Date(Date.UTC(year, month, day));
     };
 
     // Collect unique calendar dates (YYYY-MM-DD) from completions in Eastern Time
@@ -163,10 +178,17 @@ const Dashboard = () => {
   const calendarDays = (() => {
     if (!enrollment) return 1;
     const getNYDate = (d: Date) => {
-      const estStr = d.toLocaleString("en-US", { timeZone: "America/New_York" });
-      const nyDate = new Date(estStr);
-      nyDate.setHours(0, 0, 0, 0);
-      return nyDate;
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      const parts = formatter.formatToParts(d);
+      const year = parseInt(parts.find(p => p.type === 'year')!.value, 10);
+      const month = parseInt(parts.find(p => p.type === 'month')!.value, 10) - 1; // 0-indexed
+      const day = parseInt(parts.find(p => p.type === 'day')!.value, 10);
+      return new Date(Date.UTC(year, month, day));
     };
     const startNY = getNYDate(startedAt);
     const todayNY = getNYDate(new Date());
