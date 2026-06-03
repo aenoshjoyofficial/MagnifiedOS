@@ -47,7 +47,12 @@ const Dashboard = () => {
   const { data: enrollment, isLoading } = useMyEnrollment(targetUserId || '');
 
   const getTimeGreeting = () => {
-    const hour = new Date().getHours();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric',
+      hour12: false
+    });
+    const hour = parseInt(formatter.format(new Date()), 10);
     if (hour < 12) return 'Morning';
     if (hour < 18) return 'Afternoon';
     return 'Evening';
