@@ -39,8 +39,7 @@ import {
   Award,
   Upload,
   Edit,
-  Unlock,
-  Copy
+  Unlock
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { 
@@ -347,28 +346,6 @@ const ChamberPage = () => {
       console.error('Failed to save task:', err);
       const errMsg = err?.message || err?.error_description || String(err);
       alert(`Failed to save task: ${errMsg}`);
-    }
-  };
-
-  // Handle task duplication
-  const handleDuplicateTask = async (task: any) => {
-    try {
-      const cleanContent = { ...task.content };
-      
-      const siblings = allChamberTasks.filter((t: any) => t.lesson_id === task.lesson_id);
-      const nextOrder = siblings.length > 0 ? Math.max(...siblings.map((t: any) => t.order_index || 0)) + 1 : 1;
-
-      await saveTaskMutation.mutateAsync({
-        lesson_id: task.lesson_id,
-        title: `${task.title} (Copy)`,
-        description: task.description || '',
-        type: task.type,
-        content: cleanContent,
-        order_index: nextOrder
-      });
-    } catch (err: any) {
-      console.error('Failed to duplicate task:', err);
-      alert(`Failed to duplicate task: ${err.message || err}`);
     }
   };
 
@@ -904,19 +881,6 @@ const ChamberPage = () => {
                             <Unlock size={16} />
                           </IconButton>
                         )}
-                        <IconButton 
-                          size="small" 
-                          onClick={() => handleDuplicateTask(task)}
-                          disabled={saveTaskMutation.isPending}
-                          title="Duplicate Task"
-                          sx={{ 
-                            color: 'rgba(255, 255, 255, 0.5)', 
-                            '&:hover': { color: 'var(--emerald-primary)' },
-                            '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.15)' }
-                          }}
-                        >
-                          <Copy size={16} />
-                        </IconButton>
                         <IconButton 
                           size="small" 
                           onClick={() => handleOpenEditDialog(task)}
