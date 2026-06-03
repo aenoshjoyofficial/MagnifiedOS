@@ -448,8 +448,8 @@ const ChamberPage = () => {
   };
 
   // Handle saving the task edits and syncing with siblings
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveEdit = async (e?: React.FormEvent | React.MouseEvent) => {
+    e?.preventDefault();
     if (!editingTask || !editTitle.trim()) return;
 
     try {
@@ -526,7 +526,7 @@ const ChamberPage = () => {
           .gt('day_number', 0);
 
         if (lessonsWithTasks && lessonsWithTasks.length > 0) {
-          for (const lesson of lessonsWithTasks) {
+          const updatePromises = lessonsWithTasks.map(async (lesson) => {
             const allDayTasks = (lesson.tasks || []).map((t: any) => {
               if (t.id === editingTask.id) {
                 return {
@@ -576,11 +576,17 @@ const ChamberPage = () => {
 
             const html = generateRoutineHtml(routineData as any);
 
-            await supabase
+            const { error: updateError } = await supabase
               .from('lessons')
               .update({ description: html })
               .eq('id', lesson.id);
-          }
+
+            if (updateError) {
+              console.error(`Error updating description for lesson ID ${lesson.id}:`, updateError);
+            }
+          });
+
+          await Promise.all(updatePromises);
         }
       }
 
@@ -940,7 +946,7 @@ const ChamberPage = () => {
         <DialogTitle sx={{ fontWeight: 800, borderBottom: '1px solid rgba(255, 255, 255, 0.08)', pb: 2 }}>
           Edit Task
         </DialogTitle>
-        <Box component="form" onSubmit={handleSaveEdit}>
+        <Box>
           <DialogContent sx={{ py: 3 }}>
             <Stack spacing={3}>
               <TextField
@@ -1070,9 +1076,9 @@ const ChamberPage = () => {
               Cancel
             </Button>
             <Button
-              type="submit"
               variant="contained"
               disabled={editIsUploading || saveTaskMutation.isPending}
+              onClick={handleSaveEdit}
               sx={{ backgroundColor: 'var(--emerald-mid)', color: 'var(--emerald-primary)', fontWeight: 700 }}
             >
               Save Changes
