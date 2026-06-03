@@ -104,7 +104,16 @@ const TodayPractice = () => {
     
     return Math.max(1, Math.floor((todayNY.getTime() - startNY.getTime()) / (1000 * 60 * 60 * 24)) + 1);
   })();
-  const viewedDay = dayParam ? parseInt(dayParam, 10) : daysSinceStart;
+
+  const totalDays = React.useMemo(() => {
+    if (!program?.modules) return program?.duration_days || 30;
+    return program.modules.reduce((acc: number, mod: any) => {
+      const maxModDay = mod.lessons?.reduce((lMax: number, lesson: any) => Math.max(lMax, lesson.day_number || 0), 0) || 0;
+      return Math.max(acc, maxModDay);
+    }, 0) || program.duration_days || 30;
+  }, [program]);
+
+  const viewedDay = Math.min(dayParam ? parseInt(dayParam, 10) : daysSinceStart, totalDays);
 
   const allLessons = React.useMemo(() => {
     return program?.modules?.flatMap((m: any) => 
@@ -400,7 +409,7 @@ const TodayPractice = () => {
               <ChevronLeft size={20} />
             </IconButton>
             <IconButton 
-              disabled={viewedDay >= daysSinceStart}
+              disabled={viewedDay >= totalDays || (viewedDay >= daysSinceStart && !isDayComplete)}
               component={Link}
               to={`/today?day=${viewedDay + 1}`}
               sx={{ color: '#D4AF37', '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.05)' } }}
