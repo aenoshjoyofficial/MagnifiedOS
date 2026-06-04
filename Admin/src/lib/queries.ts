@@ -560,13 +560,24 @@ export const useUploadAsset = () => {
         xhr.setRequestHeader('x-upsert', 'true');
 
         // Track upload progress
-        if (xhr.upload && onProgress) {
+        if (xhr.upload) {
           xhr.upload.onprogress = (event) => {
             resetWatchdog(); // Reset watchdog timer on every progress tick
             if (event.lengthComputable) {
               const percent = Math.round((event.loaded / event.total) * 100);
-              onProgress(percent);
+              if (onProgress) {
+                onProgress(percent);
+              }
+              if (event.loaded === event.total) {
+                console.log('[Upload Watchdog] Upload reached 100%. Clearing watchdog while waiting for server response.');
+                clearWatchdog();
+              }
             }
+          };
+
+          xhr.upload.onload = () => {
+            console.log('[Upload Watchdog] Upload data fully sent. Clearing watchdog.');
+            clearWatchdog();
           };
         }
 
