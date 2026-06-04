@@ -148,12 +148,11 @@ const ChamberPage = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 50 * 1024 * 1024) {
+    if (file.size > 1000 * 1024 * 1024) {
       const confirmUpload = window.confirm(
         `Warning: The file you selected is ${(file.size / 1024 / 1024).toFixed(1)} MB.\n\n` +
-        `Supabase Free Tier projects have a strict, project-wide limit of 50 MB per file upload, regardless of bucket settings.\n\n` +
-        `• If your Supabase project is on the Free Tier, this upload will fail.\n` +
-        `• If you have upgraded your Supabase project to the Pro Tier, click OK to proceed.\n\n` +
+        `Your configured Supabase project file upload limit is 1000 MB. Uploading files larger than this will fail.\n\n` +
+        `• If you have increased your Supabase Storage maximum file size limit, click OK to proceed.\n\n` +
         `Do you want to proceed with the upload?`
       );
       if (!confirmUpload) {
@@ -194,10 +193,10 @@ const ChamberPage = () => {
       if (errMsg.includes('exceeded the maximum allowed size') || errMsg.includes('exceed')) {
         alert(
           `Upload failed: The file size (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the maximum allowed size.\n\n` +
-          `IMPORTANT: While you updated the bucket limit to 500 MB in your Supabase dashboard, Supabase Free Tier projects have a strict project-level quota of 50 MB per file.\n\n` +
+          `IMPORTANT: While you updated the bucket limit in your Supabase dashboard, please ensure that you have also increased the project-level file size limit in your Supabase Storage settings (up to 1000 MB or higher).\n\n` +
           `To fix this:\n` +
-          `1. Upgrade your Supabase project from the Free Tier to the Pro Tier ($25/month) in the Supabase Dashboard, OR\n` +
-          `2. Compress your media file (audio/video) to be under 50 MB before uploading.`
+          `1. Ensure the file size is within your configured Supabase Storage limit, OR\n` +
+          `2. Increase the maximum file size limit in your Supabase Storage settings.`
         );
       } else {
         alert(`Upload failed: ${errMsg}`);
@@ -437,12 +436,11 @@ const ChamberPage = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 50 * 1024 * 1024) {
+    if (file.size > 1000 * 1024 * 1024) {
       const confirmUpload = window.confirm(
         `Warning: The file you selected is ${(file.size / 1024 / 1024).toFixed(1)} MB.\n\n` +
-        `Supabase Free Tier projects have a strict, project-wide limit of 50 MB per file upload, regardless of bucket settings.\n\n` +
-        `• If your Supabase project is on the Free Tier, this upload will fail.\n` +
-        `• If you have upgraded your Supabase project to the Pro Tier, click OK to proceed.\n\n` +
+        `Your configured Supabase project upload limit is 1000 MB per file.\n\n` +
+        `• If you have increased your Supabase Storage maximum file size limit, click OK to proceed.\n\n` +
         `Do you want to proceed with the upload?`
       );
       if (!confirmUpload) {
@@ -485,10 +483,10 @@ const ChamberPage = () => {
       if (errMsg.includes('exceeded the maximum allowed size') || errMsg.includes('exceed')) {
         alert(
           `Upload failed: The file size (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the maximum allowed size.\n\n` +
-          `IMPORTANT: While you updated the bucket limit to 500 MB in your Supabase dashboard, Supabase Free Tier projects have a strict project-level quota of 50 MB per file.\n\n` +
+          `IMPORTANT: While you updated the bucket limit in your Supabase dashboard, please ensure that you have also increased the project-level file size limit in your Supabase Storage settings (up to 1000 MB or higher).\n\n` +
           `To fix this:\n` +
-          `1. Upgrade your Supabase project from the Free Tier to the Pro Tier ($25/month) in the Supabase Dashboard, OR\n` +
-          `2. Compress your media file (audio/video) to be under 50 MB before uploading.`
+          `1. Ensure the file size is within your configured Supabase Storage limit, OR\n` +
+          `2. Increase the maximum file size limit in your Supabase Storage settings.`
         );
       } else {
         alert(`Upload failed: ${errMsg}`);

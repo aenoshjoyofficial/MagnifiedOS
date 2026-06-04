@@ -1024,8 +1024,8 @@ const ProgramBuilder = () => {
     if (file.size > 50 * 1024 * 1024) {
       alert(
         `Warning: The file you selected is ${(file.size / 1024 / 1024).toFixed(1)} MB.\n\n` +
-        `Supabase Free Tier projects have a strict, project-wide limit of 50 MB per file upload, regardless of bucket settings.\n\n` +
-        `Please choose an image file under 50 MB.`
+        `Cover image files should normally be smaller (under 50 MB) to optimize page loading speed.\n\n` +
+        `Please choose a smaller image file.`
       );
       return;
     }
@@ -1055,7 +1055,7 @@ const ProgramBuilder = () => {
       if (errMsg.includes('exceeded the maximum allowed size') || errMsg.includes('exceed')) {
         setNotification({ 
           open: true, 
-          message: 'Upload failed: File size exceeds the 50 MB Supabase Free Tier limit.', 
+          message: 'Upload failed: File size exceeds the maximum allowed size configured in Supabase.', 
           severity: 'error' 
         });
       } else {
