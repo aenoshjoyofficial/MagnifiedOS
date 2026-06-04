@@ -13,7 +13,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = "https://phytcoyaemsehsezbruy.supabase.co";
+const SUPABASE_URL = "https://evkkbwulppxazqgprefy.supabase.co";
 const SERVICE_ROLE_KEY = process.argv[2];
 const DAYS_BACK = process.argv[3] ? parseInt(process.argv[3], 10) : 2; // Default to 2 days back (unlocks Day 3)
 const EMAIL = "casenich11@aol.com";

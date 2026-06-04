@@ -31,6 +31,7 @@ import ChecklistTask from '@/components/Tasks/ChecklistTask';
 import { useAuthStore } from '@/store/useStore';
 import { useMyEnrollment, useCompleteTask } from '@/lib/queries';
 import { supabase } from '@/lib/supabase';
+import { calculateDaysSinceStart, calculateActiveDay } from '@/lib/progression';
 
 const parseRoutineFromHtml = (html: string) => {
   try {
@@ -78,32 +79,11 @@ const TodayPractice = () => {
   const dayParam = searchParams.get('day');
 
   const program = enrollment?.programs;
-  const startedAt = enrollment ? new Date(enrollment.started_at) : new Date();
 
-  // Calculate days since start using America/New_York (Eastern Time) calendar dates.
-  // This ensures all users see the exact same day content synchronized to New York time (EST/EDT).
-  const daysSinceStart = (() => {
-    if (!enrollment) return 1;
-    
-    const getNYDate = (d: Date) => {
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-      });
-      const parts = formatter.formatToParts(d);
-      const year = parseInt(parts.find(p => p.type === 'year')!.value, 10);
-      const month = parseInt(parts.find(p => p.type === 'month')!.value, 10) - 1; // 0-indexed
-      const day = parseInt(parts.find(p => p.type === 'day')!.value, 10);
-      return new Date(Date.UTC(year, month, day));
-    };
-
-    const startNY = getNYDate(startedAt);
-    const todayNY = getNYDate(new Date());
-    
-    return Math.max(1, Math.floor((todayNY.getTime() - startNY.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-  })();
+  // Calculate days since start using the shared calendar day helper
+  const daysSinceStart = React.useMemo(() => {
+    return calculateDaysSinceStart(enrollment?.started_at);
+  }, [enrollment?.started_at]);
 
   const totalDays = React.useMemo(() => {
     if (!program?.modules) return program?.duration_days || 30;
@@ -148,45 +128,8 @@ const TodayPractice = () => {
 
   const viewedDay = React.useMemo(() => {
     if (dayParam) return Math.min(parseInt(dayParam, 10), totalDays);
-    
-    if (allLessons.length === 0) return Math.min(daysSinceStart, totalDays);
-
-    const sortedLessons = [...allLessons].sort((a: any, b: any) => (a.day_number || 0) - (b.day_number || 0));
-
-    // Lock helper: A lesson D is locked if D > daysSinceStart AND any previous day is incomplete
-    const isLocked = (dayNum: number) => {
-      if (dayNum <= 1) return false;
-      if (dayNum <= daysSinceStart) return false;
-      const prevLessons = sortedLessons.filter((l: any) => l.day_number < dayNum);
-      return prevLessons.some((l: any) => {
-        const tasks = l.tasks || [];
-        if (tasks.length === 0) return false;
-        const completed = tasks.filter((t: any) => completedKeys.has(`${l.day_number}_${t.title}`));
-        return completed.length < tasks.length;
-      });
-    };
-
-    // Find the first uncompleted unlocked day
-    const firstIncompleteUnlocked = sortedLessons.find((l: any) => {
-      if (isLocked(l.day_number)) return false;
-      const tasks = l.tasks || [];
-      if (tasks.length === 0) return false;
-      const completed = tasks.filter((t: any) => completedKeys.has(`${l.day_number}_${t.title}`));
-      return completed.length < tasks.length;
-    });
-
-    if (firstIncompleteUnlocked) {
-      return firstIncompleteUnlocked.day_number;
-    }
-
-    // Default to highest unlocked day if all unlocked days are completed
-    const unlockedLessons = sortedLessons.filter((l: any) => !isLocked(l.day_number));
-    if (unlockedLessons.length > 0) {
-      return unlockedLessons[unlockedLessons.length - 1].day_number;
-    }
-
-    return Math.min(daysSinceStart, totalDays);
-  }, [dayParam, allLessons, daysSinceStart, totalDays, completedKeys]);
+    return calculateActiveDay(program, completedKeys, daysSinceStart);
+  }, [dayParam, program, completedKeys, daysSinceStart, totalDays]);
 
   const currentLesson = React.useMemo(() => {
     if (allLessons.length === 0) return null;
@@ -445,7 +388,7 @@ const TodayPractice = () => {
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, alignSelf: { xs: 'flex-end', sm: 'center' } }}>
             <IconButton 
-              disabled={viewedDay <= 1}
+              disabled={viewedDay <= 0}
               component={Link}
               to={`/today?day=${viewedDay - 1}`}
               sx={{ color: '#D4AF37', '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.05)' } }}

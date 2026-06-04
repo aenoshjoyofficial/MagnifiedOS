@@ -22,6 +22,7 @@ import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/store/useStore';
 import { useMyEnrollment } from '@/lib/queries';
 import { supabase } from '@/lib/supabase';
+import { calculateDaysSinceStart, calculateActiveDay } from '@/lib/progression';
 
 const Dashboard = () => {
   const { user } = useAuthStore();
@@ -47,8 +48,9 @@ const Dashboard = () => {
   const { data: enrollment, isLoading } = useMyEnrollment(targetUserId || '');
 
   const getTimeGreeting = () => {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
+      timeZone,
       hour: 'numeric',
       hour12: false
     });
@@ -61,9 +63,30 @@ const Dashboard = () => {
   const program = enrollment?.programs;
   const completions = enrollment?.task_completions || [];
 
-  // Calculate streak from real task completion dates
+  // Build a map of taskId to title and dayNumber, including Day 0 tasks for progress percentages
+  const taskMap = React.useMemo(() => {
+    const map: Record<string, { title: string; dayNumber: number }> = {};
+    program?.modules?.forEach((mod: any) => {
+      mod.lessons?.forEach((les: any) => {
+        les.tasks?.forEach((task: any) => {
+          map[task.id] = {
+            title: task.title,
+            dayNumber: les.day_number || 0
+          };
+        });
+      });
+    });
+    return map;
+  }, [program]);
+
+  // Calculate streak from real task completion dates, excluding Day 0
   const calculateStreak = React.useCallback(() => {
-    if (!completions || completions.length === 0) return 0;
+    const validCompletions = completions.filter((c: any) => {
+      const tInfo = taskMap[c.task_id];
+      return tInfo && tInfo.dayNumber >= 1;
+    });
+
+    if (validCompletions.length === 0) return 0;
 
     const formatNYDate = (d: Date) => {
       const formatter = new Intl.DateTimeFormat('en-US', {
@@ -95,7 +118,7 @@ const Dashboard = () => {
 
     // Collect unique calendar dates (YYYY-MM-DD) from completions in Eastern Time
     const dates = [...new Set(
-      completions.map((c: any) => {
+      validCompletions.map((c: any) => {
         return formatNYDate(new Date(c.completed_at));
       })
     )] as string[];
@@ -127,22 +150,17 @@ const Dashboard = () => {
       }
     }
     return streak;
-  }, [completions]);
+  }, [completions, taskMap]);
 
   const currentStreak = calculateStreak();
   
-  // Build a map of taskId to title and dayNumber, and get unique tasks
+  // Build completedKeys and total count, including Day 0 tasks
   const { totalTasks, completedCount, completedKeys } = React.useMemo(() => {
-    const taskMap: Record<string, { title: string; dayNumber: number }> = {};
     const allTaskKeys = new Set<string>();
     
     program?.modules?.forEach((mod: any) => {
       mod.lessons?.forEach((les: any) => {
         les.tasks?.forEach((task: any) => {
-          taskMap[task.id] = {
-            title: task.title,
-            dayNumber: les.day_number
-          };
           allTaskKeys.add(`${les.day_number}_${task.title}`);
         });
       });
@@ -161,7 +179,7 @@ const Dashboard = () => {
       completedCount: completedKeys.size,
       completedKeys
     };
-  }, [program, completions]);
+  }, [program, completions, taskMap]);
 
   const progressPercent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
   
@@ -171,70 +189,34 @@ const Dashboard = () => {
     return Math.max(acc, maxModDay);
   }, 0) || program?.duration_days || 30;
 
-  // Current Day: Based on first uncompleted unlocked day, or calendar days since start
-  const startedAt = enrollment?.started_at ? new Date(enrollment.started_at) : new Date();
-  const calendarDays = (() => {
-    if (!enrollment) return 1;
-    const getNYDate = (d: Date) => {
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-      });
-      const parts = formatter.formatToParts(d);
-      const year = parseInt(parts.find(p => p.type === 'year')!.value, 10);
-      const month = parseInt(parts.find(p => p.type === 'month')!.value, 10) - 1; // 0-indexed
-      const day = parseInt(parts.find(p => p.type === 'day')!.value, 10);
-      return new Date(Date.UTC(year, month, day));
-    };
-    const startNY = getNYDate(startedAt);
-    const todayNY = getNYDate(new Date());
-    return Math.max(1, Math.floor((todayNY.getTime() - startNY.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-  })();
+  // Current calendar days since start in NY time
+  const calendarDays = React.useMemo(() => {
+    return calculateDaysSinceStart(enrollment?.started_at);
+  }, [enrollment?.started_at]);
 
+  // Current active day calculation (excluding Day 0)
   const currentDay = React.useMemo(() => {
-    if (!program?.modules) return Math.min(calendarDays, totalDays);
+    return calculateActiveDay(program, completedKeys, calendarDays);
+  }, [program, completedKeys, calendarDays]);
 
-    const allLessons = program.modules.flatMap((m: any) => m.lessons || [])
-      .sort((a: any, b: any) => (a.day_number || 0) - (b.day_number || 0)) || [];
+  // Count how many previous days (Day 1 to currentDay - 1) contain incomplete tasks
+  const prevIncompleteDaysCount = React.useMemo(() => {
+    if (!program?.modules || currentDay <= 1) return 0;
 
-    if (allLessons.length === 0) return Math.min(calendarDays, totalDays);
+    const allLessons = program.modules.flatMap((m: any) => m.lessons || []) || [];
+    const pastLessons = allLessons.filter((l: any) => l.day_number >= 1 && l.day_number < currentDay);
 
-    // Lock helper: A lesson D is locked if D > calendarDays AND any previous day is incomplete
-    const isLocked = (dayNum: number) => {
-      if (dayNum <= 1) return false;
-      if (dayNum <= calendarDays) return false;
-      const prevLessons = allLessons.filter((l: any) => l.day_number < dayNum);
-      return prevLessons.some((l: any) => {
-        const tasks = l.tasks || [];
-        if (tasks.length === 0) return false;
-        const completed = tasks.filter((t: any) => completedKeys.has(`${l.day_number}_${t.title}`));
-        return completed.length < tasks.length;
-      });
-    };
-
-    // Find the first uncompleted unlocked day
-    const firstIncompleteUnlocked = allLessons.find((l: any) => {
-      if (isLocked(l.day_number)) return false;
+    let incompleteCount = 0;
+    pastLessons.forEach((l: any) => {
       const tasks = l.tasks || [];
-      if (tasks.length === 0) return false;
+      if (tasks.length === 0) return;
       const completed = tasks.filter((t: any) => completedKeys.has(`${l.day_number}_${t.title}`));
-      return completed.length < tasks.length;
+      if (completed.length < tasks.length) {
+        incompleteCount++;
+      }
     });
-
-    if (firstIncompleteUnlocked) {
-      return firstIncompleteUnlocked.day_number;
-    }
-
-    // Default to highest unlocked day if all unlocked days are completed
-    const unlockedLessons = allLessons.filter((l: any) => !isLocked(l.day_number));
-    if (unlockedLessons.length > 0) {
-      return unlockedLessons[unlockedLessons.length - 1].day_number;
-    }
-
-    return Math.min(calendarDays, totalDays);
-  }, [program, calendarDays, totalDays, completedKeys]);
+    return incompleteCount;
+  }, [program, completedKeys, currentDay]);
 
   if (isLoading) {
     return (
@@ -325,6 +307,30 @@ const Dashboard = () => {
                     }} 
                   />
                 </Box>
+
+                {prevIncompleteDaysCount > 0 && (
+                  <Box sx={{ 
+                    mb: 4, 
+                    p: 2.5, 
+                    borderRadius: '16px', 
+                    backgroundColor: 'rgba(212, 175, 55, 0.05)', 
+                    border: '1px solid rgba(212, 175, 55, 0.25)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2
+                  }}>
+                    <Box sx={{ 
+                      width: 8, 
+                      height: 8, 
+                      borderRadius: '50%', 
+                      backgroundColor: '#D4AF37', 
+                      boxShadow: '0 0 10px #D4AF37, 0 0 20px #D4AF37' 
+                    }} />
+                    <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 600, fontFamily: '"Outfit", sans-serif' }}>
+                      You have {prevIncompleteDaysCount} incomplete previous practice{prevIncompleteDaysCount > 1 ? 's' : ''} to catch up.
+                    </Typography>
+                  </Box>
+                )}
 
                 <Button 
                   component={Link}

@@ -22,6 +22,7 @@ import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/store/useStore';
 import { useMyEnrollment } from '@/lib/queries';
 import { supabase } from '@/lib/supabase';
+import { calculateDaysSinceStart, calculateActiveDay, isLessonLocked as isLessonLockedHelper } from '@/lib/progression';
 
 const MyProgram = () => {
   const { user } = useAuthStore();
@@ -71,54 +72,18 @@ const MyProgram = () => {
   }, [completions, taskMap]);
 
   // Time-based calendar tracking using America/New_York (Eastern Time)
-  const startedAt = React.useMemo(() => {
-    return enrollment?.started_at ? new Date(enrollment.started_at) : new Date();
-  }, [enrollment]);
-
   const daysSinceStart = React.useMemo(() => {
-    if (!enrollment) return 1;
-    
-    const getNYDate = (d: Date) => {
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-      });
-      const parts = formatter.formatToParts(d);
-      const year = parseInt(parts.find(p => p.type === 'year')!.value, 10);
-      const month = parseInt(parts.find(p => p.type === 'month')!.value, 10) - 1; // 0-indexed
-      const day = parseInt(parts.find(p => p.type === 'day')!.value, 10);
-      return new Date(Date.UTC(year, month, day));
-    };
+    return calculateDaysSinceStart(enrollment?.started_at);
+  }, [enrollment?.started_at]);
 
-    const startNY = getNYDate(startedAt);
-    const todayNY = getNYDate(new Date());
-    
-    return Math.max(1, Math.floor((todayNY.getTime() - startNY.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-  }, [enrollment, startedAt]);
-
-  // A lesson (Day D) is locked if:
-  // 1. D > 1 (Day 1 is always unlocked)
-  // 2. AND D > daysSinceStart (the calendar day has not arrived yet)
-  // 3. AND any task in any previous lesson is not completed (the user hasn't finished prior lessons early)
+  // A lesson locking status using shared helper
   const isLessonLocked = React.useCallback((lesson: any) => {
-    const dayNum = lesson.day_number;
-    if (dayNum <= 1) return false;
-    
-    // Time-based unlock: if today is calendar Day >= dayNum, it's automatically unlocked
-    if (dayNum <= daysSinceStart) return false;
-    
-    // Completion-based unlock: check if previous days have uncompleted tasks
-    const prevLessons = program?.modules?.flatMap((m: any) => m.lessons || [])
-      .filter((l: any) => l.day_number < dayNum) || [];
-      
-    return prevLessons.some((l: any) => {
-      const tasks = l.tasks || [];
-      if (tasks.length === 0) return false;
-      const completed = tasks.filter((t: any) => completedKeys.has(`${l.day_number}_${t.title}`));
-      return completed.length < tasks.length;
-    });
+    return isLessonLockedHelper(lesson, program, completedKeys, daysSinceStart);
+  }, [program, completedKeys, daysSinceStart]);
+
+  // Calculate current active progression day (excluding Day 0)
+  const currentDay = React.useMemo(() => {
+    return calculateActiveDay(program, completedKeys, daysSinceStart);
   }, [program, completedKeys, daysSinceStart]);
 
   if (isLoading) {
@@ -369,12 +334,11 @@ const MyProgram = () => {
                     background: 'linear-gradient(to bottom, rgba(0, 212, 163, 0.25) 0%, rgba(212, 175, 55, 0.15) 50%, rgba(255, 255, 255, 0.03) 100%)',
                     zIndex: 0
                   }} />
-                  
                   <Stack spacing={2.5} sx={{ position: 'relative', zIndex: 1 }}>
                     {module.lessons.map((lesson: any) => {
                       const dayStatus = getDayStatus(lesson);
                       const isLocked = status === 'locked' || isLessonLocked(lesson);
-                      const isActiveDay = dayStatus === 'active' && !isLocked;
+                      const isActiveDay = lesson.day_number === currentDay;
                       
                       return (
                         <Box 

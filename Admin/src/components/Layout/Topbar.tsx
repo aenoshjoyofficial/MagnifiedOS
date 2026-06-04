@@ -23,13 +23,14 @@ import {
   Menu as MenuIcon
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
-import { useUIStore } from '@/store/useStore';
+import { useUIStore, useAuthStore } from '@/store/useStore';
 
 const Topbar = () => {
   const { pathname } = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { toggleSidebar } = useUIStore();
+  const { signOut } = useAuthStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -125,6 +126,7 @@ const Topbar = () => {
           anchorEl={anchorEl}
           open={Boolean(anchorEl)}
           onClose={handleClose}
+          disableRestoreFocus
           slotProps={{
             paper: {
               sx: {
@@ -157,7 +159,13 @@ const Topbar = () => {
             Settings
           </MenuItem>
           <Divider sx={{ my: 1, opacity: 0.1, backgroundColor: '#D4AF37' }} />
-          <MenuItem onClick={handleClose} sx={{ color: '#FF4B4B !important' }}>
+          <MenuItem 
+            onClick={() => {
+              handleClose();
+              signOut();
+            }} 
+            sx={{ color: '#FF4B4B !important' }}
+          >
             <ListItemIcon sx={{ color: '#FF4B4B', minWidth: 35 }}>
               <LogOut size={18} />
             </ListItemIcon>

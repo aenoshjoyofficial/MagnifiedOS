@@ -60,7 +60,6 @@ app.use(
           "https://vimeo.com",         // Vimeo direct links
         ],
         objectSrc: ["'none'"],
-        upgradeInsecureRequests: [],
       },
     },
   })

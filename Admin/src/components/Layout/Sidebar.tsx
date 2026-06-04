@@ -33,7 +33,7 @@ import {
   Wind,
   Award
 } from 'lucide-react';
-import { useUIStore } from '@/store/useStore';
+import { useUIStore, useAuthStore } from '@/store/useStore';
 
 const navItems = [
   { label: 'Admin Home', path: '/admin', icon: LayoutDashboard },
@@ -58,6 +58,7 @@ const Sidebar = () => {
   const location = useLocation();
   const pathname = location.pathname;
   const { isSidebarOpen, toggleSidebar } = useUIStore();
+  const { signOut } = useAuthStore();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -228,6 +229,7 @@ const Sidebar = () => {
         <Divider sx={{ mb: 2, opacity: 0.1, backgroundColor: '#D4AF37' }} />
         <ListItem disablePadding sx={{ display: 'block' }}>
           <ListItemButton
+            onClick={() => signOut()}
             sx={{
               minHeight: 48,
               justifyContent: isSidebarOpen ? 'initial' : 'center',

@@ -171,12 +171,6 @@ export const useSaveProgram = () => {
   
   return useMutation({
     mutationFn: async (program: Partial<Program>) => {
-      try {
-        await supabase.auth.getSession();
-      } catch (authErr) {
-        console.error("Error refreshing session before save program:", authErr);
-      }
-
       const { data, error } = await supabase
         .from('programs')
         .upsert(program)
@@ -412,11 +406,6 @@ export const useSaveTask = () => {
   
   return useMutation({
     mutationFn: async (task: Partial<Task>) => {
-      try {
-        await supabase.auth.getSession();
-      } catch (authErr) {
-        console.error("Error refreshing session before save task:", authErr);
-      }
       const cleanTask = { ...task };
       delete (cleanTask as any).chamberName;
       delete (cleanTask as any).lessonId;
