@@ -860,8 +860,8 @@ const ProgramBuilder = () => {
     // Prevent saving if title is empty (unless we are passing a title in overrides)
     if (!programData.title && !overrides.title) return;
 
-    // Prevent multiple simultaneous saves for new programs to avoid duplicate records
-    if (!programId && (saveProgramMutation.isPending || publishing)) return;
+    // Prevent multiple simultaneous saves to avoid duplicate records and DB lockups
+    if (saveProgramMutation.isPending || publishing) return;
 
     try {
       const payload = {

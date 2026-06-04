@@ -471,7 +471,7 @@ const UserManagement = () => {
           <Button 
             variant="contained" 
             onClick={handleAddUserSubmit}
-            disabled={!newUser.email || !newUser.programId || enrollUserMutation.isPending}
+            disabled={!newUser.email || !newUser.programId || createUserMutation.isPending || enrollUserMutation.isPending}
             sx={{ 
               backgroundColor: '#D4AF37', 
               color: '#0B0B0F', 
@@ -481,7 +481,7 @@ const UserManagement = () => {
               '&.Mui-disabled': { backgroundColor: 'rgba(212, 175, 55, 0.2)', color: 'rgba(11, 11, 15, 0.5)' }
             }}
           >
-            {enrollUserMutation.isPending ? 'Enrolling...' : 'Add Member'}
+            {createUserMutation.isPending || enrollUserMutation.isPending ? 'Adding...' : 'Add Member'}
           </Button>
         </DialogActions>
       </Dialog>

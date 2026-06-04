@@ -97,6 +97,7 @@ const ChamberPage = () => {
   const [editChecklistSteps, setEditChecklistSteps] = useState('');
   const [editIsUploading, setEditIsUploading] = useState(false);
   const [editUploadProgress, setEditUploadProgress] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Placeholders mapping based on task type
   const placeholders = {
@@ -501,8 +502,9 @@ const ChamberPage = () => {
   // Handle saving the task edits and syncing with siblings
   const handleSaveEdit = async (e?: React.FormEvent | React.MouseEvent) => {
     e?.preventDefault();
-    if (!editingTask || !editTitle.trim()) return;
+    if (!editingTask || !editTitle.trim() || isSaving) return;
 
+    setIsSaving(true);
     try {
       const urlVal = editContentUrl.trim();
       const resVal = editResourceUrl.trim();
@@ -648,6 +650,8 @@ const ChamberPage = () => {
       console.error('Failed to save edited task:', err);
       const errMsg = err?.message || err?.error_description || String(err);
       alert(`Failed to save task: ${errMsg}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1142,11 +1146,12 @@ const ChamberPage = () => {
             </Button>
             <Button
               variant="contained"
-              disabled={editIsUploading || saveTaskMutation.isPending}
+              disabled={editIsUploading || saveTaskMutation.isPending || isSaving}
               onClick={handleSaveEdit}
               sx={{ backgroundColor: 'var(--emerald-mid)', color: 'var(--emerald-primary)', fontWeight: 700 }}
+              startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : null}
             >
-              Save Changes
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogActions>
         </Box>
