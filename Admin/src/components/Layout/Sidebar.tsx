@@ -98,7 +98,7 @@ const Sidebar = () => {
               }} 
             />
             <Typography variant="h6" sx={{ fontWeight: 900, color: '#D4AF37', letterSpacing: '0.05em', fontSize: '1rem', fontFamily: '"Outfit", sans-serif' }}>
-              MAGNIFIED ADMIN
+              MAGNIFIED EXISTENCE ADMIN
             </Typography>
           </Link>
         ) : (

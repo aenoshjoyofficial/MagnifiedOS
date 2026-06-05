@@ -75,7 +75,7 @@ const Topbar = () => {
             {getPageTitle()}
           </Typography>
           <Typography variant="caption" sx={{ color: '#D4AF37', fontWeight: 500, letterSpacing: 0.5 }}>
-            MAGNIFIED ADMIN SYSTEM
+            MAGNIFIED EXISTENCE ADMIN SYSTEM
           </Typography>
         </Box>
       </Box>
