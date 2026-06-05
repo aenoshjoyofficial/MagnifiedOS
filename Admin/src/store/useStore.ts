@@ -1,5 +1,12 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import type { Subscription } from '@supabase/supabase-js';
+
+// Module-level variables to hold auth listeners — lives outside the store
+// so they persist across renders and can be properly cleaned up
+let authSubscription: Subscription | null = null;
+let sessionRefreshInterval: any = null;
+let visibilityChangeListener: (() => void) | null = null;
 
 interface UIState {
   isSidebarOpen: boolean;
@@ -17,6 +24,7 @@ interface AuthState {
   user: any | null;
   profile: any | null;
   loading: boolean;
+  initialized: boolean;
   initialize: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ data: any; error: any }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ data: any; error: any }>;
@@ -27,8 +35,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   profile: null,
   loading: true,
+  initialized: false,
 
   initialize: async () => {
+    if (get().initialized) return;
+    set({ initialized: true });
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -46,8 +57,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ loading: false });
     }
 
+    // Unsubscribe any previous listener before registering a new one
+    if (authSubscription) {
+      authSubscription.unsubscribe();
+      authSubscription = null;
+    }
+
     // Listen for auth changes
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
         set({ user: session.user });
         const { data: profile } = await supabase
@@ -62,8 +79,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ loading: false });
     });
 
+    authSubscription = subscription;
+
+    // Clear any previous interval/listener before setting new ones
+    if (sessionRefreshInterval) {
+      clearInterval(sessionRefreshInterval);
+      sessionRefreshInterval = null;
+    }
+    if (visibilityChangeListener) {
+      document.removeEventListener('visibilitychange', visibilityChangeListener);
+      visibilityChangeListener = null;
+    }
+
     // Auto-refresh the session every 5 minutes to keep it active
-    const refreshInterval = setInterval(async () => {
+    sessionRefreshInterval = setInterval(async () => {
       try {
         console.log('[AuthStore] Auto-refreshing session...');
         await supabase.auth.getSession();
@@ -73,7 +102,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }, 5 * 60 * 1000);
 
     // Refresh session on visibility change (tab reactivation)
-    const handleVisibilityChange = async () => {
+    visibilityChangeListener = async () => {
       if (document.visibilityState === 'visible') {
         console.log('[AuthStore] Tab active, refreshing session...');
         try {
@@ -83,13 +112,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Clean up function is not strictly needed for a global store, but good reference
-    (window as any).__authCleanup = () => {
-      clearInterval(refreshInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
+    document.addEventListener('visibilitychange', visibilityChangeListener);
   },
 
   signIn: async (email, password) => {
@@ -122,7 +145,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
+    // Unsubscribe and clear intervals when explicitly signing out
+    if (authSubscription) {
+      authSubscription.unsubscribe();
+      authSubscription = null;
+    }
+    if (sessionRefreshInterval) {
+      clearInterval(sessionRefreshInterval);
+      sessionRefreshInterval = null;
+    }
+    if (visibilityChangeListener) {
+      document.removeEventListener('visibilitychange', visibilityChangeListener);
+      visibilityChangeListener = null;
+    }
     await supabase.auth.signOut();
-    set({ user: null, profile: null });
+    set({ user: null, profile: null, initialized: false });
   },
 }));

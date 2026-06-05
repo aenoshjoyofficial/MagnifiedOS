@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const { signIn, user, loading } = useAuthStore();
+  const { signIn, user, profile, loading } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +25,7 @@ const AdminLogin = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // If already logged in as admin, redirect to dashboard
-  if (user && !loading) {
+  if (user && !loading && profile?.role === 'admin') {
     return <Navigate to="/admin" replace />;
   }
 

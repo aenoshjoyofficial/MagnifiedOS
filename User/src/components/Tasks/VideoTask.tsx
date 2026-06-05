@@ -11,9 +11,10 @@ import { CheckCircle2 } from 'lucide-react';
 interface VideoTaskProps {
   url: string;
   onComplete: () => void;
+  disabled?: boolean;
 }
 
-const VideoTask = ({ url, onComplete }: VideoTaskProps) => {
+const VideoTask = ({ url, onComplete, disabled = false }: VideoTaskProps) => {
   const [isCompleted, setIsCompleted] = useState(false);
 
   // Robust YouTube and Vimeo ID extraction
@@ -93,7 +94,14 @@ const VideoTask = ({ url, onComplete }: VideoTaskProps) => {
       <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Button 
           variant={isCompleted ? "text" : "outlined"}
-          onClick={() => { setIsCompleted(true); onComplete(); }}
+          onClick={() => {
+            if (disabled) {
+              onComplete();
+              return;
+            }
+            setIsCompleted(true);
+            onComplete();
+          }}
           startIcon={isCompleted ? <CheckCircle2 size={18} /> : null}
           sx={{ 
             color: isCompleted ? '#D4AF37' : '#B0B0B0',

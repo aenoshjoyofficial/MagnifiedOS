@@ -2,9 +2,11 @@ import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import type { Subscription } from '@supabase/supabase-js';
 
-// Module-level variable to hold the auth subscription — lives outside the store
-// so it persists across renders and can be properly unsubscribed
+// Module-level variables to hold auth listeners — lives outside the store
+// so they persist across renders and can be properly cleaned up
 let authSubscription: Subscription | null = null;
+let sessionRefreshInterval: any = null;
+let visibilityChangeListener: (() => void) | null = null;
 
 interface UIState {
   isSidebarOpen: boolean;
@@ -63,13 +65,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     // Unsubscribe any previous listener before registering a new one
-    // (guards against React Strict Mode double-invocation and HMR re-registration)
     if (authSubscription) {
       authSubscription.unsubscribe();
       authSubscription = null;
     }
 
-    // Listen for auth changes — store the returned subscription so it can be cleaned up
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
         set({ user: session.user });
@@ -86,6 +87,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
 
     authSubscription = subscription;
+
+    // Clear any previous interval/listener before setting new ones
+    if (sessionRefreshInterval) {
+      clearInterval(sessionRefreshInterval);
+      sessionRefreshInterval = null;
+    }
+    if (visibilityChangeListener) {
+      document.removeEventListener('visibilitychange', visibilityChangeListener);
+      visibilityChangeListener = null;
+    }
+
+    // Auto-refresh the session every 5 minutes to keep it active
+    sessionRefreshInterval = setInterval(async () => {
+      try {
+        console.log('[AuthStore] Auto-refreshing user session...');
+        await supabase.auth.getSession();
+      } catch (err) {
+        console.error('[AuthStore] Auto-refresh user session error:', err);
+      }
+    }, 5 * 60 * 1000);
+
+    // Refresh session on visibility change (tab reactivation)
+    visibilityChangeListener = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[AuthStore] User tab active, refreshing session...');
+        try {
+          await supabase.auth.getSession();
+        } catch (err) {
+          console.error('[AuthStore] User session refresh on visibility change error:', err);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', visibilityChangeListener);
   },
 
   signIn: async (email, password) => {
@@ -105,10 +139,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
-    // Unsubscribe the auth listener when the user explicitly signs out
+    // Unsubscribe and clear intervals when explicitly signing out
     if (authSubscription) {
       authSubscription.unsubscribe();
       authSubscription = null;
+    }
+    if (sessionRefreshInterval) {
+      clearInterval(sessionRefreshInterval);
+      sessionRefreshInterval = null;
+    }
+    if (visibilityChangeListener) {
+      document.removeEventListener('visibilitychange', visibilityChangeListener);
+      visibilityChangeListener = null;
     }
     await supabase.auth.signOut();
     set({ user: null, profile: null, initialized: false });

@@ -12,9 +12,10 @@ import { CheckCircle2 } from 'lucide-react';
 interface TextTaskProps {
   content: string;
   onComplete: () => void;
+  disabled?: boolean;
 }
 
-const TextTask = ({ content, onComplete }: TextTaskProps) => {
+const TextTask = ({ content, onComplete, disabled = false }: TextTaskProps) => {
   const [isCompleted, setIsCompleted] = useState(false);
 
   return (
@@ -45,7 +46,14 @@ const TextTask = ({ content, onComplete }: TextTaskProps) => {
       <Box sx={{ display: 'flex', justifyContent: 'center' }}>
         <Button 
           variant="contained"
-          onClick={() => { setIsCompleted(true); onComplete(); }}
+          onClick={() => {
+            if (disabled) {
+              onComplete();
+              return;
+            }
+            setIsCompleted(true);
+            onComplete();
+          }}
           startIcon={isCompleted ? <CheckCircle2 size={18} /> : null}
           sx={{ 
             backgroundColor: isCompleted ? 'transparent' : '#D4AF37',

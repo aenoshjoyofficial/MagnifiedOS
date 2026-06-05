@@ -25,9 +25,10 @@ import {
 interface AudioTaskProps {
   url: string;
   onComplete: () => void;
+  disabled?: boolean;
 }
 
-const AudioTask = ({ url, onComplete }: AudioTaskProps) => {
+const AudioTask = ({ url, onComplete, disabled = false }: AudioTaskProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -53,6 +54,10 @@ const AudioTask = ({ url, onComplete }: AudioTaskProps) => {
       
       // Auto-complete at 90% — use live DOM duration (not state) to avoid race condition
       if (!isCompleted && isFinite(audioDuration) && audioDuration > 0 && (current / audioDuration) >= 0.9) {
+        if (disabled) {
+          // Block auto-completing locked tasks
+          return;
+        }
         setIsCompleted(true);
         onComplete();
       }
@@ -170,7 +175,14 @@ const AudioTask = ({ url, onComplete }: AudioTaskProps) => {
           </Box>
 
           <Button 
-            onClick={() => { setIsCompleted(true); onComplete(); }}
+            onClick={() => {
+              if (disabled) {
+                onComplete();
+                return;
+              }
+              setIsCompleted(true);
+              onComplete();
+            }}
             startIcon={isCompleted ? <CheckCircle2 size={18} /> : null}
             sx={{ 
               color: isCompleted ? '#D4AF37' : '#B0B0B0',

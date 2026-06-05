@@ -163,17 +163,7 @@ const TodayPractice = () => {
     }
   }, [enrollment, viewedDay, isDayComplete]);
 
-  const handleTaskComplete = async (taskId: string) => {
-    if (!enrollment) return;
-    const task = tasks.find((t: any) => t.id === taskId);
-    if (!task) return;
-    if (completedKeys.has(`${viewedDay}_${task.title}`)) return;
-    
-    await completeTaskMutation.mutateAsync({
-      enrollmentId: enrollment.id,
-      taskId: taskId
-    });
-  };
+
 
   const parsedRoutine = React.useMemo(() => {
     const dayLessons = allLessons.filter((l: any) => l.day_number === viewedDay);
@@ -327,6 +317,23 @@ const TodayPractice = () => {
 
     return lockedSet;
   }, [parsedRoutine, tasks, completedKeys, viewedDay, getTasksForWindow, getUnassignedTasks]);
+
+  const handleTaskComplete = async (taskId: string) => {
+    if (!enrollment) return;
+    const task = tasks.find((t: any) => t.id === taskId);
+    if (!task) return;
+    if (completedKeys.has(`${viewedDay}_${task.title}`)) return;
+
+    if (lockedTaskIds.has(taskId)) {
+      alert("First complete the previous task in order to complete this task.");
+      return;
+    }
+    
+    await completeTaskMutation.mutateAsync({
+      enrollmentId: enrollment.id,
+      taskId: taskId
+    });
+  };
 
   // Early returns must come AFTER all hooks
   if (isLoading) {
@@ -716,23 +723,23 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
     if (showVideo && showAudio) {
       return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <AudioTask url={mainUrl} onComplete={onComplete} />
-          <VideoTask url={videoUrl} onComplete={onComplete} />
+          <AudioTask url={mainUrl} onComplete={onComplete} disabled={isLocked} />
+          <VideoTask url={videoUrl} onComplete={onComplete} disabled={isLocked} />
         </Box>
       );
     }
 
     if (showVideo) {
-      return <VideoTask url={videoUrl} onComplete={onComplete} />;
+      return <VideoTask url={videoUrl} onComplete={onComplete} disabled={isLocked} />;
     }
 
     switch (task.type) {
       case 'audio':
-        return <AudioTask url={mainUrl || resourceUrl} onComplete={onComplete} />;
+        return <AudioTask url={mainUrl || resourceUrl} onComplete={onComplete} disabled={isLocked} />;
       case 'video':
-        return <VideoTask url={mainUrl || resourceUrl} onComplete={onComplete} />;
+        return <VideoTask url={mainUrl || resourceUrl} onComplete={onComplete} disabled={isLocked} />;
       case 'text':
-        return <TextTask content={task.content?.text || task.description} onComplete={onComplete} />;
+        return <TextTask content={task.content?.text || task.description} onComplete={onComplete} disabled={isLocked} />;
       case 'checklist':
         return task.content?.steps?.length > 0
           ? <ChecklistTask steps={task.content.steps} onComplete={onComplete} disabled={isLocked} />
@@ -751,18 +758,18 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
         backdropFilter: 'blur(16px)',
         border: '1px solid',
         borderColor: isCompleted ? 'rgba(212, 175, 55, 0.35)' : isLocked ? 'rgba(0, 212, 163, 0.05)' : 'rgba(0, 212, 163, 0.15)',
-        opacity: isLocked ? 0.6 : 1,
+        opacity: isLocked ? 0.8 : 1,
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        cursor: isLocked ? 'not-allowed' : 'pointer',
+        cursor: 'pointer',
         boxShadow: isCompleted ? '0 8px 32px 0 rgba(212, 175, 55, 0.05)' : '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
-        '&:hover': !isLocked ? {
-          borderColor: 'rgba(0, 212, 163, 0.45)',
+        '&:hover': {
+          borderColor: isLocked ? 'rgba(0, 212, 163, 0.25)' : 'rgba(0, 212, 163, 0.45)',
           boxShadow: '0 0 25px rgba(0, 212, 163, 0.18)',
           backgroundColor: 'rgba(7, 24, 21, 0.5)',
           transform: 'translateY(-2px)'
-        } : {}
+        }
       }}
-      onClick={() => !isLocked && setIsExpanded(!isExpanded)}
+      onClick={() => setIsExpanded(!isExpanded)}
     >
       <Box sx={{ 
         display: 'flex', 
@@ -849,49 +856,55 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
           <Typography variant="body2" sx={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.85rem' }}>
             {task.content?.duration || '5 min'}
           </Typography>
-          {!isLocked && (
-            <Button
-              variant="contained"
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                onComplete();
-              }}
-              disabled={isCompleted}
-              startIcon={isCompleted ? <CheckCircle2 size={14} /> : null}
-              sx={{
-                minWidth: '100px',
-                borderRadius: '20px',
-                textTransform: 'none',
-                fontSize: '0.75rem',
-                fontWeight: 800,
-                py: 0.75,
-                px: 2.5,
-                transition: 'all 0.3s ease',
-                ...(isCompleted ? {
+          <Button
+            variant={isCompleted ? "contained" : isLocked ? "outlined" : "contained"}
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              onComplete();
+            }}
+            disabled={isCompleted}
+            startIcon={isCompleted ? <CheckCircle2 size={14} /> : null}
+            sx={{
+              minWidth: '100px',
+              borderRadius: '20px',
+              textTransform: 'none',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              py: 0.75,
+              px: 2.5,
+              transition: 'all 0.3s ease',
+              ...(isCompleted ? {
+                background: 'linear-gradient(135deg, #D4AF37 0%, #F0D27A 100%)',
+                color: '#040D0C',
+                boxShadow: '0 4px 12px rgba(212, 175, 55, 0.2)',
+                '&.Mui-disabled': {
                   background: 'linear-gradient(135deg, #D4AF37 0%, #F0D27A 100%)',
                   color: '#040D0C',
-                  boxShadow: '0 4px 12px rgba(212, 175, 55, 0.2)',
-                  '&.Mui-disabled': {
-                    background: 'linear-gradient(135deg, #D4AF37 0%, #F0D27A 100%)',
-                    color: '#040D0C',
-                    opacity: 0.9,
-                  }
-                } : {
-                  background: 'linear-gradient(135deg, #00D4A3 0%, #0B3B32 100%)',
-                  color: '#040D0C',
-                  boxShadow: '0 4px 12px rgba(0, 212, 163, 0.2)',
-                  '&:hover': {
-                    background: 'linear-gradient(135deg, #39E7C0 0%, #00D4A3 100%)',
-                    boxShadow: '0 6px 16px rgba(0, 212, 163, 0.4)',
-                    transform: 'translateY(-1px)',
-                  }
-                })
-              }}
-            >
-              {isCompleted ? 'Done' : 'Mark Done'}
-            </Button>
-          )}
+                  opacity: 0.9,
+                }
+              } : isLocked ? {
+                background: 'transparent',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: '#B0B0B0',
+                '&:hover': {
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                }
+              } : {
+                background: 'linear-gradient(135deg, #00D4A3 0%, #0B3B32 100%)',
+                color: '#040D0C',
+                boxShadow: '0 4px 12px rgba(0, 212, 163, 0.2)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #39E7C0 0%, #00D4A3 100%)',
+                  boxShadow: '0 6px 16px rgba(0, 212, 163, 0.4)',
+                  transform: 'translateY(-1px)',
+                }
+              })
+            }}
+          >
+            {isCompleted ? 'Done' : 'Mark Done'}
+          </Button>
         </Box>
       </Box>
 
@@ -905,7 +918,7 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
         </Box>
       )}
 
-      {isExpanded && !isLocked && (
+      {isExpanded && (
         <Box 
           sx={{ mt: 3, pt: 3, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}
           onClick={(e) => e.stopPropagation()} // Prevent collapse when interacting with content

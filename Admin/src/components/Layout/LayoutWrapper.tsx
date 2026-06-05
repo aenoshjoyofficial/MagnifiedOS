@@ -2,13 +2,14 @@ import React, { useEffect } from 'react';
 import { Box, useTheme, useMediaQuery } from '@mui/material';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
-import { useUIStore } from '@/store/useStore';
+import { useUIStore, useAuthStore } from '@/store/useStore';
 import { useLocation } from 'react-router-dom';
 
 const PUBLIC_ROUTES = ['/admin/login', '/admin/signup', '/admin/forgot-password', '/admin/reset-password'];
 
 const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
   const { isSidebarOpen, setSidebarOpen } = useUIStore();
+  const { user, profile, loading } = useAuthStore();
   const location = useLocation();
   const pathname = location.pathname;
   const theme = useTheme();
@@ -24,7 +25,7 @@ const LayoutWrapper = ({ children }: { children: React.ReactNode }) => {
 
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
 
-  if (isPublicRoute) {
+  if (isPublicRoute || loading || !user || profile?.role !== 'admin') {
     return <>{children}</>;
   }
 

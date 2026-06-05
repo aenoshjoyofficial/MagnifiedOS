@@ -47,7 +47,7 @@ BEGIN
     crypt(target_password, gen_salt('bf')), -- SECURELY HASH THE PASSWORD
     now(), -- AUTO-CONFIRM EMAIL
     '{"provider": "email", "providers": ["email"]}',
-    format('{"full_name": "%s"}', target_full_name)::jsonb,
+    jsonb_build_object('full_name', target_full_name, 'role', target_role),
     now(),
     now(),
     '',

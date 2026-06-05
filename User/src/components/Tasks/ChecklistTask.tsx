@@ -20,7 +20,10 @@ const ChecklistTask = ({ steps, onComplete, disabled = false }: ChecklistTaskPro
   const [checkedSteps, setCheckedSteps] = useState<boolean[]>(new Array(steps.length).fill(false));
 
   const handleToggle = (index: number) => {
-    if (disabled) return;
+    if (disabled) {
+      onComplete();
+      return;
+    }
     
     const newChecked = [...checkedSteps];
     newChecked[index] = !newChecked[index];
