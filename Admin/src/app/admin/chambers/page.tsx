@@ -506,142 +506,154 @@ const ChamberPage = () => {
 
     setIsSaving(true);
     try {
-      const urlVal = editContentUrl.trim();
-      const resVal = editResourceUrl.trim();
-      const isYoutubeOrVimeo = urlVal.includes('youtube.com') || urlVal.includes('youtu.be') || urlVal.includes('vimeo.com') || resVal.includes('youtube.com') || resVal.includes('youtu.be') || resVal.includes('vimeo.com');
-      const dbType = (editType === 'image' || editType === 'pdf') ? 'text' : editType;
+      const saveExecution = async () => {
+        const urlVal = editContentUrl.trim();
+        const resVal = editResourceUrl.trim();
+        const isYoutubeOrVimeo = urlVal.includes('youtube.com') || urlVal.includes('youtu.be') || urlVal.includes('vimeo.com') || resVal.includes('youtube.com') || resVal.includes('youtu.be') || resVal.includes('vimeo.com');
+        const dbType = (editType === 'image' || editType === 'pdf') ? 'text' : editType;
 
-      const stepsArray = editType === 'checklist' 
-        ? editChecklistSteps.split('\n').map(s => s.trim()).filter(Boolean)
-        : [];
+        const stepsArray = editType === 'checklist' 
+          ? editChecklistSteps.split('\n').map(s => s.trim()).filter(Boolean)
+          : [];
 
-      const updatedContent = {
-        ...editingTask.content,
-        url: urlVal || (isYoutubeOrVimeo ? resVal : ''),
-        text: editDescription.trim(),
-        format: editType,
-        resource_url: isYoutubeOrVimeo ? resVal : '',
-        duration: editDuration.trim(),
-        steps: stepsArray
-      };
+        // Build core updated content (preserve routine_window if exists)
+        const updatedContent: any = {
+          ...(editingTask.content || {}),
+          url: urlVal || (isYoutubeOrVimeo ? resVal : ''),
+          text: editDescription.trim(),
+          format: editType,
+          resource_url: isYoutubeOrVimeo ? resVal : '',
+          duration: editDuration.trim(),
+          steps: stepsArray
+        };
+        if (editingTask.content?.routine_window) {
+          updatedContent.routine_window = editingTask.content.routine_window;
+        }
 
-      // 1. Get sibling tasks inside the same module that share the pre-edited title
-      if (matchedModule?.id) {
-        const { data: moduleLessons } = await supabase
-          .from('lessons')
-          .select('id')
-          .eq('module_id', matchedModule.id);
+        // 1. Get sibling tasks inside the same module that share the pre-edited title
+        if (matchedModule?.id) {
+          const { data: moduleLessons } = await supabase
+            .from('lessons')
+            .select('id')
+            .eq('module_id', matchedModule.id);
 
-        const lessonIds = moduleLessons?.map((l: any) => l.id) || [];
-        
-        if (lessonIds.length > 0) {
-          // Update all sibling tasks (excluding the current one to let saveTaskMutation handle it)
-          const { error: siblingError } = await supabase
-            .from('tasks')
-            .update({
-              title: editTitle.trim(),
-              description: editDescription.trim(),
-              type: dbType,
-              content: updatedContent
-            })
-            .in('lesson_id', lessonIds)
-            .eq('title', editingTask.title)
-            .neq('id', editingTask.id);
+          const lessonIds = moduleLessons?.map((l: any) => l.id) || [];
+          
+          if (lessonIds.length > 0) {
+            // Fetch siblings first to merge and preserve their existing routine_window
+            const { data: siblingTasks } = await supabase
+              .from('tasks')
+              .select('id, content')
+              .in('lesson_id', lessonIds)
+              .eq('title', editingTask.title)
+              .neq('id', editingTask.id);
 
-          if (siblingError) {
-            console.error('Error updating sibling tasks:', siblingError);
+            if (siblingTasks && siblingTasks.length > 0) {
+              const siblingUpdates = siblingTasks.map(async (sibling: any) => {
+                const siblingUpdatedContent = {
+                  ...(sibling.content || {}),
+                  url: urlVal || (isYoutubeOrVimeo ? resVal : ''),
+                  text: editDescription.trim(),
+                  format: editType,
+                  resource_url: isYoutubeOrVimeo ? resVal : '',
+                  duration: editDuration.trim(),
+                  steps: stepsArray
+                };
+                if (sibling.content?.routine_window) {
+                  siblingUpdatedContent.routine_window = sibling.content.routine_window;
+                }
+
+                const { error: updErr } = await supabase
+                  .from('tasks')
+                  .update({
+                    title: editTitle.trim(),
+                    description: editDescription.trim(),
+                    type: dbType,
+                    content: siblingUpdatedContent
+                  })
+                  .eq('id', sibling.id);
+                if (updErr) throw updErr;
+              });
+              await Promise.all(siblingUpdates);
+            }
           }
         }
-      }
 
-      // 2. Update the primary editing task (triggers onSuccess/invalidation)
-      await saveTaskMutation.mutateAsync({
-        id: editingTask.id,
-        lesson_id: editingTask.lesson_id,
-        title: editTitle.trim(),
-        description: editDescription.trim(),
-        type: dbType as any,
-        content: updatedContent,
-        order_index: editingTask.order_index
-      });
+        // 2. Update the primary editing task (triggers onSuccess/invalidation)
+        await saveTaskMutation.mutateAsync({
+          id: editingTask.id,
+          lesson_id: editingTask.lesson_id,
+          title: editTitle.trim(),
+          description: editDescription.trim(),
+          type: dbType as any,
+          content: updatedContent,
+          order_index: editingTask.order_index
+        });
 
-      // 3. Re-compile the routine HTML descriptions for all daily lessons in this module
-      if (matchedModule?.id) {
-        const { data: lessonsWithTasks } = await supabase
-          .from('lessons')
-          .select(`
-            id,
-            title,
-            day_number,
-            tasks (*)
-          `)
-          .eq('module_id', matchedModule.id)
-          .gt('day_number', 0);
+        // 3. Re-compile the routine HTML descriptions for all daily lessons in this module
+        if (matchedModule?.id) {
+          const { data: lessonsWithTasks } = await supabase
+            .from('lessons')
+            .select(`
+              id,
+              title,
+              day_number,
+              tasks (*)
+            `)
+            .eq('module_id', matchedModule.id)
+            .gt('day_number', 0);
 
-        if (lessonsWithTasks && lessonsWithTasks.length > 0) {
-          const updatePromises = lessonsWithTasks.map(async (lesson) => {
-            const allDayTasks = (lesson.tasks || []).map((t: any) => {
-              if (t.id === editingTask.id) {
+          if (lessonsWithTasks && lessonsWithTasks.length > 0) {
+            // Run updates sequentially to prevent connection exhaustion and deadlocks
+            for (const lesson of lessonsWithTasks) {
+              // Since Step 1 & 2 updated the DB, lesson.tasks contains the updated tasks.
+              const routineWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
+              const routineData = routineWindows.map(windowName => {
+                const tasks = (lesson.tasks || []).filter((t: any) => {
+                  const taskWindow = t.content?.routine_window;
+                  return taskWindow && taskWindow.toLowerCase() === windowName.toLowerCase();
+                });
+                if (tasks.length === 0) return null;
+
+                const anchor = tasks.map((t: any) => t.title).join(' · ');
+                const instruction = tasks.map((t: any) => {
+                  const desc = t.description || t.content?.text || '';
+                  return /<[a-z][\s\S]*>/i.test(desc) ? desc : `<p>${desc}</p>`;
+                }).join('');
+
+                const systemName = matchedModule?.title || 'Daily Integration';
+
                 return {
-                  ...t,
-                  title: editTitle.trim(),
-                  description: editDescription.trim(),
-                  type: dbType,
-                  content: updatedContent
+                  window: windowName,
+                  system: systemName,
+                  anchor,
+                  instruction
                 };
+              }).filter(Boolean);
+
+              const html = generateRoutineHtml(routineData as any);
+
+              const { error: updateError } = await supabase
+                .from('lessons')
+                .update({ description: html })
+                .eq('id', lesson.id);
+
+              if (updateError) {
+                console.error(`Error updating description for lesson ID ${lesson.id}:`, updateError);
+                throw updateError;
               }
-              if (t.title === editingTask.title) {
-                return {
-                  ...t,
-                  title: editTitle.trim(),
-                  description: editDescription.trim(),
-                  type: dbType,
-                  content: updatedContent
-                };
-              }
-              return t;
-            });
-
-            // Re-compile routine HTML
-            const routineWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
-            const routineData = routineWindows.map(windowName => {
-              const tasks = allDayTasks.filter((t: any) => {
-                const taskWindow = t.content?.routine_window;
-                return taskWindow && taskWindow.toLowerCase() === windowName.toLowerCase();
-              });
-              if (tasks.length === 0) return null;
-
-              const anchor = tasks.map((t: any) => t.title).join(' · ');
-              const instruction = tasks.map((t: any) => {
-                const desc = t.description || t.content?.text || '';
-                return /<[a-z][\s\S]*>/i.test(desc) ? desc : `<p>${desc}</p>`;
-              }).join('');
-
-              const systemName = matchedModule?.title || 'Daily Integration';
-
-              return {
-                window: windowName,
-                system: systemName,
-                anchor,
-                instruction
-              };
-            }).filter(Boolean);
-
-            const html = generateRoutineHtml(routineData as any);
-
-            const { error: updateError } = await supabase
-              .from('lessons')
-              .update({ description: html })
-              .eq('id', lesson.id);
-
-            if (updateError) {
-              console.error(`Error updating description for lesson ID ${lesson.id}:`, updateError);
             }
-          });
-
-          await Promise.all(updatePromises);
+          }
         }
-      }
+      };
+
+      // Race save execution against a 15 second timeout to prevent indefinite hanging
+      await Promise.race([
+        saveExecution(),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Save request timed out. Please check your network and try again.')), 15000)
+        )
+      ]);
 
       // Close dialog
       setIsEditDialogOpen(false);
