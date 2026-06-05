@@ -228,23 +228,61 @@ const Dashboard = () => {
 
   return (
     <Box sx={{ py: 1 }}>
-      <Box sx={{ mb: 5 }}>
-        <Typography 
-          variant="h4" 
-          sx={{ 
-            fontWeight: 800, 
-            mb: 1, 
-            fontFamily: '"Playfair Display", serif', 
-            letterSpacing: '0.01em',
-            fontSize: { xs: '1.75rem', sm: '2.25rem', md: '2.5rem' },
-            textShadow: '0 2px 10px rgba(0, 212, 163, 0.1)'
-          }}
-        >
-          Good {getTimeGreeting()}, {profile?.full_name?.split(' ')[0] || 'Explorer'}
-        </Typography>
-        <Typography variant="body1" sx={{ color: 'var(--text-secondary)', fontWeight: 500, letterSpacing: '0.02em', fontSize: { xs: '0.9rem', sm: '1rem' } }}>
-          Welcome back to your daily expansion.
-        </Typography>
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: 5,
+        gap: 2
+      }}>
+        <Box>
+          <Typography 
+            variant="h4" 
+            sx={{ 
+              fontWeight: 800, 
+              mb: 1, 
+              fontFamily: '"Playfair Display", serif', 
+              letterSpacing: '0.01em',
+              fontSize: { xs: '1.75rem', sm: '2.25rem', md: '2.5rem' },
+              textShadow: '0 2px 10px rgba(0, 212, 163, 0.1)'
+            }}
+          >
+            Good {getTimeGreeting()}, {profile?.full_name?.split(' ')[0] || 'Explorer'}
+          </Typography>
+          <Typography variant="body1" sx={{ color: 'var(--text-secondary)', fontWeight: 500, letterSpacing: '0.02em', fontSize: { xs: '0.9rem', sm: '1rem' } }}>
+            Welcome back to your daily expansion.
+          </Typography>
+        </Box>
+        <Box sx={{ 
+          display: { xs: 'none', sm: 'flex' },
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <img 
+            src="/logo.png" 
+            alt="Magnified Existence Logo" 
+            style={{ 
+              width: '64px', 
+              height: '64px', 
+              objectFit: 'contain',
+              borderRadius: '50%',
+              border: '2px solid rgba(212, 175, 55, 0.3)',
+              boxShadow: '0 0 20px rgba(212, 175, 55, 0.25)',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              cursor: 'pointer'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'scale(1.08) rotate(5deg)';
+              e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.6)';
+              e.currentTarget.style.boxShadow = '0 0 30px rgba(212, 175, 55, 0.45)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
+              e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.3)';
+              e.currentTarget.style.boxShadow = '0 0 20px rgba(212, 175, 55, 0.25)';
+            }}
+          />
+        </Box>
       </Box>
 
       <Grid container spacing={4}>

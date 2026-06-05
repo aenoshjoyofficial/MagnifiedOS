@@ -81,12 +81,34 @@ const AdminLogin = () => {
         <Box sx={{ mb: 4 }}>
           <Box sx={{ 
             display: 'inline-flex', 
-            p: 2, 
-            borderRadius: 3, 
-            backgroundColor: 'rgba(212, 175, 55, 0.1)', 
-            mb: 2 
+            mb: 2,
+            justifyContent: 'center',
+            alignItems: 'center'
           }}>
-            <ShieldCheck size={40} color="#D4AF37" />
+            <img 
+              src="/logo.png" 
+              alt="Magnified Existence Logo" 
+              style={{ 
+                width: '120px', 
+                height: '120px', 
+                objectFit: 'contain',
+                borderRadius: '50%',
+                border: '2px solid rgba(212, 175, 55, 0.2)',
+                boxShadow: '0 0 25px rgba(212, 175, 55, 0.2)',
+                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                cursor: 'pointer'
+              }} 
+              onMouseOver={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05) translateY(-4px)';
+                e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
+                e.currentTarget.style.boxShadow = '0 10px 35px rgba(212, 175, 55, 0.35)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.transform = 'scale(1) translateY(0)';
+                e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.2)';
+                e.currentTarget.style.boxShadow = '0 0 25px rgba(212, 175, 55, 0.2)';
+              }}
+            />
           </Box>
           <Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: -1, mb: 1 }}>
             ADMIN <span style={{ color: '#D4AF37' }}>OS</span>

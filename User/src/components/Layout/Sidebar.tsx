@@ -77,21 +77,50 @@ const Sidebar = () => {
         },
       }}
     >
-      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', justifyContent: (isSidebarOpen || isMobile) ? 'space-between' : 'center' }}>
-        {(isSidebarOpen || isMobile) && (
-          <Link to="/dashboard" style={{ textDecoration: 'none' }}>
-            <Typography variant="h6" sx={{ fontWeight: 800, color: '#D4AF37', letterSpacing: -0.5 }}>
+      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', justifyContent: (isSidebarOpen || isMobile) ? 'space-between' : 'center', minHeight: '80px' }}>
+        {(isSidebarOpen || isMobile) ? (
+          <Link to="/dashboard" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <img 
+              src="/logo.png" 
+              alt="Magnified Existence Logo" 
+              style={{ 
+                width: '32px', 
+                height: '32px', 
+                objectFit: 'contain',
+                borderRadius: '50%',
+                border: '1.5px solid rgba(212, 175, 55, 0.3)',
+                boxShadow: '0 0 12px rgba(212, 175, 55, 0.2)'
+              }} 
+            />
+            <Typography variant="h6" sx={{ fontWeight: 900, color: '#D4AF37', letterSpacing: '0.05em', fontSize: '1rem', fontFamily: '"Outfit", sans-serif' }}>
               MAGNIFIED
             </Typography>
           </Link>
+        ) : (
+          <Link to="/dashboard" style={{ textDecoration: 'none', display: 'flex', justifyContent: 'center' }}>
+            <img 
+              src="/logo.png" 
+              alt="Magnified Existence Logo" 
+              style={{ 
+                width: '34px', 
+                height: '34px', 
+                objectFit: 'contain',
+                borderRadius: '50%',
+                border: '1.5px solid rgba(212, 175, 55, 0.3)',
+                boxShadow: '0 0 12px rgba(212, 175, 55, 0.2)'
+              }} 
+            />
+          </Link>
         )}
-        <IconButton onClick={toggleSidebar} size="small" sx={{ color: '#D4AF37' }}>
-          {isMobile ? (
-            <ChevronLeft size={20} />
-          ) : (
-            isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />
-          )}
-        </IconButton>
+        {(isSidebarOpen || isMobile) && (
+          <IconButton onClick={toggleSidebar} size="small" sx={{ color: '#D4AF37' }}>
+            {isMobile ? (
+              <ChevronLeft size={20} />
+            ) : (
+              isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />
+            )}
+          </IconButton>
+        )}
       </Box>
 
       <List sx={{ px: 1.5 }}>
