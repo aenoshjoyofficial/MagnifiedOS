@@ -29,7 +29,7 @@ import VideoTask from '@/components/Tasks/VideoTask';
 import TextTask from '@/components/Tasks/TextTask';
 import ChecklistTask from '@/components/Tasks/ChecklistTask';
 import { useAuthStore } from '@/store/useStore';
-import { useMyEnrollment, useCompleteTask } from '@/lib/queries';
+import { useMyEnrollment, useCompleteTask, useCompleteEnrollment, useStartNewCycle } from '@/lib/queries';
 import { supabase } from '@/lib/supabase';
 import { calculateDaysSinceStart, calculateActiveDay } from '@/lib/progression';
 
@@ -63,9 +63,12 @@ const TodayPractice = () => {
 
   const { data: enrollment, isLoading } = useMyEnrollment(targetUserId || '');
   const completeTaskMutation = useCompleteTask();
+  const completeEnrollmentMutation = useCompleteEnrollment();
+  const startNewCycleMutation = useStartNewCycle();
 
   const [hasLoadedInitial, setHasLoadedInitial] = React.useState(false);
   const [isDaySubmitted, setIsDaySubmitted] = React.useState(false);
+  const [completedCycleInfo, setCompletedCycleInfo] = React.useState<any>(null);
   const [visibleInstructions, setVisibleInstructions] = React.useState<Record<string, boolean>>({});
 
   const toggleInstruction = (windowName: string) => {
@@ -158,10 +161,49 @@ const TodayPractice = () => {
 
   React.useEffect(() => {
     if (enrollment) {
-      setIsDaySubmitted(isDayComplete);
+      const isPastDay = viewedDay < daysSinceStart;
+      setIsDaySubmitted(isPastDay ? isDayComplete : false);
       setHasLoadedInitial(true);
     }
-  }, [enrollment, viewedDay, isDayComplete]);
+  }, [enrollment, viewedDay, isDayComplete, daysSinceStart]);
+
+  const { tasksCompleted, totalProgramTasks } = React.useMemo(() => {
+    let total = 0;
+    program?.modules?.forEach((mod: any) => {
+      mod.lessons?.forEach((les: any) => {
+        total += les.tasks?.length || 0;
+      });
+    });
+    return {
+      tasksCompleted: completions.length,
+      totalProgramTasks: total || 1
+    };
+  }, [program, completions]);
+
+  const handleFinishDay = async () => {
+    console.log("Finish Day clicked");
+    if (viewedDay === totalDays && enrollment) {
+      const pct = Math.round((tasksCompleted / totalProgramTasks) * 100);
+      const cycleInfo = {
+        cycle_number: enrollment.cycle_number || 1,
+        program_title: program?.title || 'Program',
+        user_id: enrollment.user_id,
+        program_id: enrollment.program_id
+      };
+      await completeEnrollmentMutation.mutateAsync({
+        enrollmentId: enrollment.id,
+        cycleNumber: enrollment.cycle_number || 1,
+        startedAt: enrollment.started_at,
+        userId: enrollment.user_id,
+        programId: enrollment.program_id,
+        tasksCompleted,
+        totalTasks: totalProgramTasks,
+        completionPercentage: pct
+      });
+      setCompletedCycleInfo(cycleInfo);
+    }
+    setIsDaySubmitted(true);
+  };
 
 
 
@@ -340,6 +382,105 @@ const TodayPractice = () => {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
         <CircularProgress sx={{ color: '#D4AF37' }} />
+      </Box>
+    );
+  }
+
+  // Render Program Complete screen if final day was completed and submitted
+  if (isDaySubmitted && viewedDay === totalDays && completedCycleInfo) {
+    return (
+      <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10, pt: 5, px: 2 }}>
+        <Box 
+          sx={{ 
+            p: 6, 
+            borderRadius: '24px', 
+            backgroundColor: 'rgba(7, 24, 21, 0.45)', 
+            backdropFilter: 'blur(24px)',
+            border: '1px solid rgba(212, 175, 55, 0.3)', 
+            boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4), 0 0 25px rgba(212, 175, 55, 0.1)',
+            textAlign: 'center'
+          }}
+        >
+          <Trophy size={64} color="#D4AF37" style={{ marginBottom: 24, filter: 'drop-shadow(0 0 15px rgba(212,175,55,0.4))' }} />
+          <Typography 
+            variant="h3" 
+            sx={{ 
+              fontWeight: 800, 
+              color: '#D4AF37', 
+              mb: 2, 
+              fontFamily: '"Playfair Display", serif',
+              fontSize: { xs: '2rem', sm: '2.5rem' }
+            }}
+          >
+            Protocol Completed
+          </Typography>
+          <Typography variant="body1" sx={{ color: '#EAEAEA', mb: 1, fontWeight: 700, fontSize: '1.1rem' }}>
+            Congratulations! You have completed {completedCycleInfo.program_title}.
+          </Typography>
+          <Box sx={{ mb: 4, display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
+            <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 800, letterSpacing: '0.05em', fontFamily: '"Outfit", sans-serif' }}>
+              CURRENT CYCLE: {completedCycleInfo.cycle_number}
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#B0B0B0', fontWeight: 500, fontFamily: '"Outfit", sans-serif' }}>
+              COMPLETION DATE: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </Typography>
+          </Box>
+          <Typography variant="body2" sx={{ color: '#B0B0B0', mb: 5, lineHeight: 1.6 }}>
+            Your daily evolution protocols have been successfully integrated. You can now choose to restart the program as a new cycle.
+          </Typography>
+          
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'center' }}>
+            <Button 
+              variant="contained" 
+              onClick={async () => {
+                await startNewCycleMutation.mutateAsync({
+                  userId: completedCycleInfo.user_id,
+                  programId: completedCycleInfo.program_id,
+                  cycleNumber: completedCycleInfo.cycle_number + 1
+                });
+                window.location.href = '/dashboard';
+              }}
+              disabled={startNewCycleMutation.isPending}
+              sx={{ 
+                background: 'linear-gradient(135deg, #00D4A3 0%, #0B3B32 100%)',
+                color: '#040D0C',
+                px: 5,
+                py: 2,
+                fontSize: '1rem',
+                fontWeight: 800,
+                borderRadius: '30px',
+                textTransform: 'none',
+                boxShadow: '0 8px 32px rgba(0, 212, 163, 0.25)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #39E7C0 0%, #00D4A3 100%)',
+                  boxShadow: '0 12px 40px rgba(0, 212, 163, 0.45)',
+                }
+              }}
+            >
+              {startNewCycleMutation.isPending ? 'Starting...' : 'Start New Cycle'}
+            </Button>
+            <Button 
+              variant="outlined" 
+              component={Link} 
+              to="/dashboard" 
+              sx={{ 
+                borderColor: 'rgba(255, 255, 255, 0.2)', 
+                color: '#EAEAEA',
+                borderRadius: '30px',
+                px: 5,
+                py: 2,
+                fontWeight: 850,
+                textTransform: 'none',
+                '&:hover': {
+                  borderColor: '#EAEAEA',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                }
+              }}
+            >
+              Return to Dashboard
+            </Button>
+          </Stack>
+        </Box>
       </Box>
     );
   }
@@ -626,47 +767,51 @@ const TodayPractice = () => {
       {/* Global Actions */}
       <Box sx={{ textAlign: 'center', mt: 4 }}>
         {isDaySubmitted ? (
-          <Box 
-            sx={{ 
-              p: 4.5, 
-              borderRadius: '24px', 
-              backgroundColor: 'rgba(7, 24, 21, 0.45)', 
-              backdropFilter: 'blur(24px)',
-              border: '1px solid rgba(212, 175, 55, 0.3)', 
-              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4), 0 0 25px rgba(212, 175, 55, 0.1)',
-              textAlign: 'center'
-            }}
-          >
-            <Trophy size={48} color="#D4AF37" style={{ marginBottom: 16 }} />
-            <Typography variant="h5" sx={{ fontWeight: 800, color: '#D4AF37', mb: 1, fontFamily: '"Playfair Display", serif' }}>Day Complete!</Typography>
-            <Typography variant="body2" sx={{ color: '#B0B0B0', mb: 3 }}>
-              You have successfully integrated today's neural protocols.
-            </Typography>
-            <Button 
-              variant="outlined" 
-              component={Link} 
-              to="/dashboard" 
+          viewedDay === totalDays ? (
+            null
+          ) : (
+            <Box 
               sx={{ 
-                borderColor: '#00D4A3', 
-                color: '#00D4A3',
-                borderRadius: '30px',
-                px: 4.5,
-                fontWeight: 800,
-                textTransform: 'none',
-                '&:hover': {
-                  borderColor: '#39E7C0',
-                  backgroundColor: 'rgba(0, 212, 163, 0.05)',
-                }
+                p: 4.5, 
+                borderRadius: '24px', 
+                backgroundColor: 'rgba(7, 24, 21, 0.45)', 
+                backdropFilter: 'blur(24px)',
+                border: '1px solid rgba(212, 175, 55, 0.3)', 
+                boxShadow: '0 12px 40px rgba(0, 0, 0, 0.4), 0 0 25px rgba(212, 175, 55, 0.1)',
+                textAlign: 'center'
               }}
             >
-              Return to Dashboard
-            </Button>
-          </Box>
+              <Trophy size={48} color="#D4AF37" style={{ marginBottom: 16 }} />
+              <Typography variant="h5" sx={{ fontWeight: 800, color: '#D4AF37', mb: 1, fontFamily: '"Playfair Display", serif' }}>Day Complete!</Typography>
+              <Typography variant="body2" sx={{ color: '#B0B0B0', mb: 3 }}>
+                You have successfully integrated today's neural protocols.
+              </Typography>
+              <Button 
+                variant="outlined" 
+                component={Link} 
+                to="/dashboard" 
+                sx={{ 
+                  borderColor: '#00D4A3', 
+                  color: '#00D4A3',
+                  borderRadius: '30px',
+                  px: 4.5,
+                  fontWeight: 800,
+                  textTransform: 'none',
+                  '&:hover': {
+                    borderColor: '#39E7C0',
+                    backgroundColor: 'rgba(0, 212, 163, 0.05)',
+                  }
+                }}
+              >
+                Return to Dashboard
+              </Button>
+            </Box>
+          )
         ) : (
           <Button 
             variant="contained" 
-            disabled={!isDayComplete}
-            onClick={() => setIsDaySubmitted(true)}
+            disabled={!isDayComplete || completeEnrollmentMutation.isPending}
+            onClick={handleFinishDay}
             sx={{ 
               background: 'linear-gradient(135deg, #00D4A3 0%, #0B3B32 100%)',
               color: '#040D0C',
@@ -685,7 +830,7 @@ const TodayPractice = () => {
               '&.Mui-disabled': { background: 'rgba(255, 255, 255, 0.05)', color: 'rgba(255, 255, 255, 0.2)' }
             }}
           >
-            Complete All Tasks to Finish Day
+            {completeEnrollmentMutation.isPending ? 'Completing Cycle...' : 'Complete All Tasks to Finish Day'}
           </Button>
         )}
       </Box>

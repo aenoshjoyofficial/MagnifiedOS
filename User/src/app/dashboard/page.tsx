@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/store/useStore';
-import { useMyEnrollment } from '@/lib/queries';
+import { useMyEnrollment, useMyLastCompletedEnrollment, useStartNewCycle } from '@/lib/queries';
 import { supabase } from '@/lib/supabase';
 import { calculateDaysSinceStart, calculateActiveDay } from '@/lib/progression';
 
@@ -45,7 +45,11 @@ const Dashboard = () => {
     findUserId();
   }, [user]);
 
-  const { data: enrollment, isLoading } = useMyEnrollment(targetUserId || '');
+  const { data: enrollment, isLoading: isActiveLoading } = useMyEnrollment(targetUserId || '');
+  const { data: completedEnrollment, isLoading: isCompletedLoading } = useMyLastCompletedEnrollment(targetUserId || '');
+  const startNewCycleMutation = useStartNewCycle();
+
+  const isLoading = isActiveLoading || isCompletedLoading;
 
   const getTimeGreeting = () => {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -325,7 +329,7 @@ const Dashboard = () => {
                 <Box sx={{ mb: 4.5 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
                     <Typography variant="body2" sx={{ fontWeight: 700, letterSpacing: '0.02em', color: '#EAEAEA' }}>
-                      Day {currentDay} of {totalDays} Integration
+                      Day {currentDay} of {totalDays} Integration{enrollment?.cycle_number && ` (Cycle ${enrollment.cycle_number})`}
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#D4AF37', fontWeight: 700 }}>
                       {progressPercent}% Complete
@@ -387,6 +391,52 @@ const Dashboard = () => {
                   }}
                 >
                   Continue Today's Practice
+                </Button>
+              </Box>
+            ) : completedEnrollment ? (
+              <Box sx={{ position: 'relative', zIndex: 1 }}>
+                <Typography variant="overline" sx={{ color: '#D4AF37', fontWeight: 800, letterSpacing: '0.15em', fontFamily: '"Outfit", sans-serif' }}>
+                  PROGRAM COMPLETED
+                </Typography>
+                <Typography 
+                  variant="h4" 
+                  sx={{ 
+                    fontWeight: 800, 
+                    mt: 1.5, 
+                    mb: 1.5, 
+                    fontSize: { xs: '1.5rem', sm: '2rem', md: '2.25rem' },
+                    fontFamily: '"Playfair Display", serif',
+                    letterSpacing: '0.01em'
+                  }}
+                >
+                  {completedEnrollment.programs?.title || 'Casey June Protocol'}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#B0B0B0', mb: 4, maxWidth: { xs: '100%', sm: '85%' }, lineHeight: 1.6 }}>
+                  You have successfully integrated all evolution protocols for Cycle {completedEnrollment.cycle_number || 1}.
+                </Typography>
+                <Button 
+                  onClick={async () => {
+                    await startNewCycleMutation.mutateAsync({
+                      userId: completedEnrollment.user_id,
+                      programId: completedEnrollment.program_id,
+                      cycleNumber: (completedEnrollment.cycle_number || 1) + 1
+                    });
+                  }}
+                  disabled={startNewCycleMutation.isPending}
+                  variant="contained" 
+                  color="primary"
+                  startIcon={<Play size={18} fill="currentColor" />}
+                  sx={{ 
+                    px: { xs: 3, sm: 5 },
+                    py: 1.75,
+                    fontSize: '0.95rem',
+                    fontWeight: 800,
+                    borderRadius: '30px',
+                    boxShadow: '0 4px 20px rgba(0, 212, 163, 0.25)',
+                    width: { xs: '100%', sm: 'auto' }
+                  }}
+                >
+                  {startNewCycleMutation.isPending ? 'Starting...' : 'Start New Cycle'}
                 </Button>
               </Box>
             ) : (

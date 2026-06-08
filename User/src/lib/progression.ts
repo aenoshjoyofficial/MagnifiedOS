@@ -101,3 +101,4 @@ export const calculateActiveDay = (
 
   return activeDay;
 };
+

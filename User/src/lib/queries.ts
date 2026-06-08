@@ -313,3 +313,128 @@ export const useMarkAllNotificationsRead = () => {
   });
 };
 
+/**
+ * Fetch the user's last completed enrollment
+ */
+export const useMyLastCompletedEnrollment = (userId: string) => {
+  return useQuery({
+    queryKey: ['my-completed-enrollment', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('enrollments')
+        .select(`
+          *,
+          programs (
+            *,
+            modules (
+              *,
+              lessons (
+                *,
+                tasks (*)
+              )
+            )
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('status', 'completed')
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userId,
+  });
+};
+
+/**
+ * Complete an enrollment and store it in program_cycles history
+ */
+export const useCompleteEnrollment = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ 
+      enrollmentId, 
+      cycleNumber, 
+      startedAt, 
+      userId, 
+      programId,
+      tasksCompleted,
+      totalTasks,
+      completionPercentage
+    }: { 
+      enrollmentId: string, 
+      cycleNumber: number, 
+      startedAt: string, 
+      userId: string, 
+      programId: string,
+      tasksCompleted: number,
+      totalTasks: number,
+      completionPercentage: number
+    }) => {
+      // 1. Mark enrollment as completed
+      console.log("Completing enrollment", enrollmentId);
+      const { error: updateError } = await supabase
+        .from('enrollments')
+        .update({ status: 'completed' })
+        .eq('id', enrollmentId);
+      if (updateError) throw updateError;
+      
+      // 2. Insert record into program_cycles history table
+      const { error: insertError } = await supabase
+        .from('program_cycles')
+        .insert({
+          enrollment_id: enrollmentId,
+          user_id: userId,
+          program_id: programId,
+          cycle_number: cycleNumber,
+          tasks_completed: tasksCompleted,
+          total_tasks: totalTasks,
+          completion_percentage: completionPercentage,
+          started_at: startedAt,
+          completed_at: new Date().toISOString()
+        });
+      if (insertError) throw insertError;
+      
+      return { id: enrollmentId, status: 'completed' };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-enrollment'] });
+      queryClient.invalidateQueries({ queryKey: ['my-completed-enrollment'] });
+    }
+  });
+};
+
+/**
+ * Start a new cycle for the user
+ */
+export const useStartNewCycle = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ userId, programId, cycleNumber }: { userId: string, programId: string, cycleNumber: number }) => {
+      const { data, error } = await supabase
+        .from('enrollments')
+        .insert({
+          user_id: userId,
+          program_id: programId,
+          status: 'active',
+          cycle_number: cycleNumber,
+          started_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-enrollment'] });
+      queryClient.invalidateQueries({ queryKey: ['my-completed-enrollment'] });
+    }
+  });
+};
+
+
