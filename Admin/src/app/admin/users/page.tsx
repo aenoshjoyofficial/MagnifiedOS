@@ -276,7 +276,18 @@ const UserManagement = () => {
                           onClick={(e) => handleAvatarClick(e, user)}
                           sx={{ p: 0, '&:hover': { opacity: 0.8 } }}
                         >
-                          <Avatar src={user.avatar_url} sx={{ bgcolor: i % 2 === 0 ? '#D4AF37' : '#2196F3', color: '#0B0B0F', fontWeight: 700 }}>
+                          <Avatar 
+                            src={user.avatar_url} 
+                            sx={{ 
+                              bgcolor: i % 2 === 0 ? '#D4AF37' : '#2196F3', 
+                              color: '#0B0B0F', 
+                              fontWeight: 700,
+                              '& img': {
+                                objectFit: 'cover',
+                                objectPosition: 'center 20%'
+                              }
+                            }}
+                          >
                             {user.full_name?.[0] || user.email?.[0]}
                           </Avatar>
                         </IconButton>
@@ -513,7 +524,21 @@ const UserManagement = () => {
           {selectedUser && (
             <Stack spacing={4}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Avatar src={selectedUser.avatar_url} sx={{ width: 80, height: 80, fontSize: '2rem', bgcolor: '#D4AF37', color: '#0B0B0F', fontWeight: 800 }}>
+                <Avatar 
+                  src={selectedUser.avatar_url} 
+                  sx={{ 
+                    width: 80, 
+                    height: 80, 
+                    fontSize: '2rem', 
+                    bgcolor: '#D4AF37', 
+                    color: '#0B0B0F', 
+                    fontWeight: 800,
+                    '& img': {
+                      objectFit: 'cover',
+                      objectPosition: 'center 20%'
+                    }
+                  }}
+                >
                   {selectedUser.full_name?.[0] || selectedUser.email?.[0]}
                 </Avatar>
                 <Box>

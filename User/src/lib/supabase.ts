@@ -7,11 +7,25 @@ if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KE
   console.warn('CRITICAL WARNING: Supabase credentials missing or invalid! Using dummy placeholders to prevent runtime crashes. Check your .env file.');
 }
 
+let lockPromise = Promise.resolve();
+
+const memoryLock = async (name: string, acquireTimeout: number, fn: () => Promise<any>) => {
+  const currentLock = lockPromise;
+  let resolveLock: () => void;
+  lockPromise = new Promise((resolve) => {
+    resolveLock = resolve;
+  });
+  try {
+    await currentLock;
+    return await fn();
+  } finally {
+    resolveLock!();
+  }
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    lock: async (name, acquireTimeout, fn) => {
-      return await fn();
-    }
+    lock: memoryLock
   }
 });
 

@@ -236,7 +236,11 @@ const Profile = () => {
                   bgcolor: 'var(--emerald-primary)', 
                   fontSize: '3rem', 
                   fontWeight: 800,
-                  boxShadow: 'var(--emerald-glow)'
+                  boxShadow: 'var(--emerald-glow)',
+                  '& img': {
+                    objectFit: 'cover',
+                    objectPosition: 'center 20%'
+                  }
                 }}
               >
                 {isUploadingAvatar ? <CircularProgress size={40} sx={{ color: '#fff' }} /> : (profile?.full_name?.[0] || 'A')}

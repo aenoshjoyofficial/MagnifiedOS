@@ -110,7 +110,11 @@ const UserDetail = () => {
                   color: '#0B0B0F', 
                   fontSize: '2.5rem', 
                   fontWeight: 800,
-                  boxShadow: '0 0 20px rgba(212, 175, 55, 0.2)'
+                  boxShadow: '0 0 20px rgba(212, 175, 55, 0.2)',
+                  '& img': {
+                    objectFit: 'cover',
+                    objectPosition: 'center 20%'
+                  }
                 }}
               >
                 {userData.full_name?.[0] || userData.email[0]}

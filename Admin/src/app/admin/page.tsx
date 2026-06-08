@@ -121,7 +121,21 @@ const AdminDashboard = () => {
                         <TableRow key={user.id} sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.01)' } }}>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                              <Avatar src={user.avatar_url} sx={{ width: 32, height: 32, bgcolor: '#D4AF37', color: '#0B0B0F', fontSize: '0.8rem', fontWeight: 700 }}>
+                              <Avatar 
+                                src={user.avatar_url} 
+                                sx={{ 
+                                  width: 32, 
+                                  height: 32, 
+                                  bgcolor: '#D4AF37', 
+                                  color: '#0B0B0F', 
+                                  fontSize: '0.8rem', 
+                                  fontWeight: 700,
+                                  '& img': {
+                                    objectFit: 'cover',
+                                    objectPosition: 'center 20%'
+                                  }
+                                }}
+                              >
                                 {user.full_name?.[0] || user.email[0]}
                               </Avatar>
                               <Box>

@@ -244,7 +244,11 @@ const Topbar = () => {
               color: '#0B0B0F',
               fontSize: '0.9rem',
               fontWeight: 700,
-              border: '2px solid rgba(212, 175, 55, 0.2)'
+              border: '2px solid rgba(212, 175, 55, 0.2)',
+              '& img': {
+                objectFit: 'cover',
+                objectPosition: 'center 20%'
+              }
             }}
           >
             {profile?.full_name?.[0] || 'A'}

@@ -127,7 +127,18 @@ const BookingsManager = () => {
                   <TableRow key={booking.id} sx={{ '& td': { borderBottom: '1px solid rgba(255, 255, 255, 0.05)' } }}>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar src={booking.profiles?.avatar_url} sx={{ width: 40, height: 40, border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                        <Avatar 
+                          src={booking.profiles?.avatar_url} 
+                          sx={{ 
+                            width: 40, 
+                            height: 40, 
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            '& img': {
+                              objectFit: 'cover',
+                              objectPosition: 'center 20%'
+                            }
+                          }}
+                        >
                           {booking.profiles?.full_name?.[0]}
                         </Avatar>
                         <Box>
