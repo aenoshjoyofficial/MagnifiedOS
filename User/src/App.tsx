@@ -16,7 +16,15 @@ import SessionsPage from './app/sessions/page';
 import ProfilePage from './app/profile/page';
 import SettingsPage from './app/settings/page';
 
+import { useAuthStore } from './store/useStore';
+
 const App = () => {
+  const initialize = useAuthStore((state) => state.initialize);
+
+  React.useEffect(() => {
+    initialize();
+  }, [initialize]);
+
   return (
     <Providers>
       <LayoutWrapper>

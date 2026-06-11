@@ -35,6 +35,12 @@ const MemberResetPassword = () => {
         return;
       }
       
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session && !hash.includes('access_token')) {
+        navigate('/login');
+        return;
+      }
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user && !hash.includes('access_token')) {
         navigate('/login');

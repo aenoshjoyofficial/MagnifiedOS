@@ -17,7 +17,15 @@ import SessionManagerPage from './app/admin/sessions/page';
 import BookingsPage from './app/admin/bookings/page';
 import ChamberPlaceholderPage from './app/admin/chambers/page';
 
+import { useAuthStore } from './store/useStore';
+
 const App = () => {
+  const initialize = useAuthStore((state) => state.initialize);
+
+  React.useEffect(() => {
+    initialize();
+  }, [initialize]);
+
   return (
     <Providers>
       <LayoutWrapper>

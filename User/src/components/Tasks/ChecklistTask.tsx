@@ -14,10 +14,11 @@ interface ChecklistTaskProps {
   steps: string[];
   onComplete: () => void;
   disabled?: boolean;
+  isCompleted?: boolean;
 }
 
-const ChecklistTask = ({ steps, onComplete, disabled = false }: ChecklistTaskProps) => {
-  const [checkedSteps, setCheckedSteps] = useState<boolean[]>(new Array(steps.length).fill(false));
+const ChecklistTask = ({ steps, onComplete, disabled = false, isCompleted = false }: ChecklistTaskProps) => {
+  const [checkedSteps, setCheckedSteps] = useState<boolean[]>(new Array(steps.length).fill(isCompleted));
 
   const handleToggle = (index: number) => {
     if (disabled) {

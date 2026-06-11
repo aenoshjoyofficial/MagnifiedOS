@@ -370,10 +370,16 @@ const TodayPractice = () => {
       alert("First complete the previous task in order to complete this task.");
       return;
     }
+
+    // Prevent duplicate parallel requests if the mutation is already in progress for this task
+    if (completeTaskMutation.isPending && completeTaskMutation.variables?.taskId === taskId) {
+      return;
+    }
     
     await completeTaskMutation.mutateAsync({
       enrollmentId: enrollment.id,
-      taskId: taskId
+      taskId: taskId,
+      userId: user?.id
     });
   };
 
@@ -686,6 +692,7 @@ const TodayPractice = () => {
                           index={globalIndex} 
                           isCompleted={completedKeys.has(`${viewedDay}_${task.title}`)}
                           isLocked={lockedTaskIds.has(task.id)}
+                          isPending={completeTaskMutation.isPending && completeTaskMutation.variables?.taskId === task.id}
                           onComplete={() => handleTaskComplete(task.id)} 
                         />
                       );
@@ -721,6 +728,7 @@ const TodayPractice = () => {
                       index={globalIndex} 
                       isCompleted={completedKeys.has(`${viewedDay}_${task.title}`)}
                       isLocked={lockedTaskIds.has(task.id)}
+                      isPending={completeTaskMutation.isPending && completeTaskMutation.variables?.taskId === task.id}
                       onComplete={() => handleTaskComplete(task.id)} 
                     />
                   );
@@ -754,6 +762,7 @@ const TodayPractice = () => {
                 index={index} 
                 isCompleted={completedKeys.has(`${viewedDay}_${task.title}`)}
                 isLocked={lockedTaskIds.has(task.id)}
+                isPending={completeTaskMutation.isPending && completeTaskMutation.variables?.taskId === task.id}
                 onComplete={() => handleTaskComplete(task.id)} 
               />
             ))}
@@ -850,7 +859,7 @@ const isExternalVideo = (url: string) => {
   );
 };
 
-const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: any, index: number, isCompleted: boolean, isLocked: boolean, onComplete: () => void }) => {
+const TaskCard = ({ task, index, isCompleted, isLocked, isPending, onComplete }: { task: any, index: number, isCompleted: boolean, isLocked: boolean, isPending: boolean, onComplete: () => void }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [checklistOpen, setChecklistOpen] = useState(false);
 
@@ -868,29 +877,35 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
     if (showVideo && showAudio) {
       return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <AudioTask url={mainUrl} onComplete={onComplete} disabled={isLocked} />
-          <VideoTask url={videoUrl} onComplete={onComplete} disabled={isLocked} />
+          <AudioTask url={mainUrl} onComplete={onComplete} disabled={isLocked || isPending} />
+          <VideoTask url={videoUrl} onComplete={onComplete} disabled={isLocked || isPending} />
         </Box>
       );
     }
 
     if (showVideo) {
-      return <VideoTask url={videoUrl} onComplete={onComplete} disabled={isLocked} />;
+      return <VideoTask url={videoUrl} onComplete={onComplete} disabled={isLocked || isPending} />;
     }
 
     switch (task.type) {
       case 'audio':
-        return <AudioTask url={mainUrl || resourceUrl} onComplete={onComplete} disabled={isLocked} />;
+        return <AudioTask url={mainUrl || resourceUrl} onComplete={onComplete} disabled={isLocked || isPending} />;
       case 'video':
-        return <VideoTask url={mainUrl || resourceUrl} onComplete={onComplete} disabled={isLocked} />;
+        return <VideoTask url={mainUrl || resourceUrl} onComplete={onComplete} disabled={isLocked || isPending} />;
       case 'text':
-        return <TextTask content={task.content?.text || task.description} onComplete={onComplete} disabled={isLocked} />;
+        return <TextTask content={task.content?.text || task.description} onComplete={onComplete} disabled={isLocked || isPending} />;
       case 'checklist':
         return task.content?.steps?.length > 0
-          ? <ChecklistTask steps={task.content.steps} onComplete={onComplete} disabled={isLocked} />
+          ? <ChecklistTask 
+              key={isCompleted ? 'completed' : 'pending'}
+              steps={task.content.steps} 
+              onComplete={onComplete} 
+              disabled={isLocked || isCompleted || isPending} 
+              isCompleted={isCompleted} 
+            />
           : null;
       default:
-        return <Button onClick={onComplete}>Complete Task</Button>;
+        return <Button onClick={onComplete} disabled={isPending}>Complete Task</Button>;
     }
   };
 
@@ -1008,7 +1023,7 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
               e.stopPropagation();
               onComplete();
             }}
-            disabled={isCompleted}
+            disabled={isCompleted || isPending}
             startIcon={isCompleted ? <CheckCircle2 size={14} /> : null}
             sx={{
               minWidth: '100px',
@@ -1044,11 +1059,15 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
                   background: 'linear-gradient(135deg, #39E7C0 0%, #00D4A3 100%)',
                   boxShadow: '0 6px 16px rgba(0, 212, 163, 0.4)',
                   transform: 'translateY(-1px)',
+                },
+                '&.Mui-disabled': {
+                  background: 'rgba(0, 212, 163, 0.3)',
+                  color: 'rgba(4, 13, 12, 0.5)',
                 }
               })
             }}
           >
-            {isCompleted ? 'Done' : 'Mark Done'}
+            {isCompleted ? 'Done' : isPending ? 'Saving...' : 'Mark Done'}
           </Button>
         </Box>
       </Box>
@@ -1059,7 +1078,13 @@ const TaskCard = ({ task, index, isCompleted, isLocked, onComplete }: { task: an
           sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}
           onClick={(e) => e.stopPropagation()} // Prevent card collapse when interacting with the checklist
         >
-          <ChecklistTask steps={task.content.steps} onComplete={onComplete} disabled={isLocked} />
+          <ChecklistTask 
+            key={isCompleted ? 'completed' : 'pending'}
+            steps={task.content.steps} 
+            onComplete={onComplete} 
+            disabled={isLocked || isCompleted || isPending} 
+            isCompleted={isCompleted} 
+          />
         </Box>
       )}
 

@@ -43,11 +43,15 @@ const AdminResetPassword = () => {
       }
 
       // 2. Check user session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session && !hash.includes('access_token')) {
+        navigate('/admin/login');
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        if (!hash.includes('access_token')) {
-          navigate('/admin/login');
-        }
+      if (!user && !hash.includes('access_token')) {
+        navigate('/admin/login');
       }
     };
     checkStatus();

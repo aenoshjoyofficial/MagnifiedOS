@@ -69,7 +69,15 @@ export const useCompleteTask = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ enrollmentId, taskId }: { enrollmentId: string, taskId: string }) => {
+    mutationFn: async ({ enrollmentId, taskId, userId }: { enrollmentId: string, taskId: string, userId?: string }) => {
+      let finalUserId = userId;
+      if (!finalUserId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          finalUserId = user.id;
+        }
+      }
+
       const { data, error } = await supabase
         .from('task_completions')
         .insert({
@@ -78,9 +86,31 @@ export const useCompleteTask = () => {
           completed_at: new Date().toISOString()
         })
         .select()
-        .single();
+        .maybeSingle();
       
-      if (error) throw error;
+      if (error && error.code !== '23505') {
+        throw error;
+      }
+
+      if (finalUserId) {
+        const { error: progressError } = await supabase
+          .from('user_progress')
+          .upsert({
+            user_id: finalUserId,
+            task_id: taskId,
+            status: 'completed',
+            completion_percentage: 100,
+            completed_at: new Date().toISOString(),
+            last_accessed_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id,task_id'
+          });
+        
+        if (progressError) {
+          throw progressError;
+        }
+      }
+      
       return data;
     },
     onSuccess: () => {
@@ -161,26 +191,76 @@ export const useSessions = () => {
   return useQuery({
     queryKey: ['sessions'],
     queryFn: async () => {
-      // Try querying with is_published filter first
-      const { data, error } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('is_published', true)
-        .order('start_time', { ascending: true });
-      
-      if (error) {
-        // If the query failed (e.g. because is_published column doesn't exist yet),
-        // fallback to retrieving all sessions without that filter
-        console.warn('Failed to query sessions with is_published, trying fallback without filter:', error.message);
-        const { data: fallbackData, error: fallbackError } = await supabase
+      // 1. Try querying with is_published and start_time
+      try {
+        const { data, error } = await supabase
+          .from('sessions')
+          .select('*')
+          .eq('is_published', true)
+          .order('start_time', { ascending: true });
+        
+        if (!error && data) {
+          return data.map((s: any) => ({
+            ...s,
+            start_time: s.start_time || s.scheduled_at,
+            host_name: s.host_name || 'Dr. Aris Thorne',
+            session_type: s.session_type || 'Group Call',
+            duration_minutes: s.duration_minutes || 60,
+          }));
+        }
+      } catch (_) {}
+
+      // 2. Try querying with is_published and scheduled_at
+      try {
+        const { data, error } = await supabase
+          .from('sessions')
+          .select('*')
+          .eq('is_published', true)
+          .order('scheduled_at', { ascending: true });
+        
+        if (!error && data) {
+          return data.map((s: any) => ({
+            ...s,
+            start_time: s.start_time || s.scheduled_at,
+            host_name: s.host_name || 'Dr. Aris Thorne',
+            session_type: s.session_type || 'Group Call',
+            duration_minutes: s.duration_minutes || 60,
+          }));
+        }
+      } catch (_) {}
+
+      // 3. Try fallback without is_published filter, order by start_time
+      try {
+        const { data, error } = await supabase
           .from('sessions')
           .select('*')
           .order('start_time', { ascending: true });
         
-        if (fallbackError) throw fallbackError;
-        return fallbackData;
-      }
-      return data;
+        if (!error && data) {
+          return data.map((s: any) => ({
+            ...s,
+            start_time: s.start_time || s.scheduled_at,
+            host_name: s.host_name || 'Dr. Aris Thorne',
+            session_type: s.session_type || 'Group Call',
+            duration_minutes: s.duration_minutes || 60,
+          }));
+        }
+      } catch (_) {}
+
+      // 4. Try fallback without is_published filter, order by scheduled_at
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*')
+        .order('scheduled_at', { ascending: true });
+      
+      if (error) throw error;
+      return (data || []).map((s: any) => ({
+        ...s,
+        start_time: s.start_time || s.scheduled_at,
+        host_name: s.host_name || 'Dr. Aris Thorne',
+        session_type: s.session_type || 'Group Call',
+        duration_minutes: s.duration_minutes || 60,
+      }));
     },
   });
 };
@@ -374,30 +454,26 @@ export const useCompleteEnrollment = () => {
       totalTasks: number,
       completionPercentage: number
     }) => {
-      // 1. Mark enrollment as completed
-      console.log("Completing enrollment", enrollmentId);
-      const { error: updateError } = await supabase
-        .from('enrollments')
-        .update({ status: 'completed' })
-        .eq('id', enrollmentId);
-      if (updateError) throw updateError;
-      
-      // 2. Insert record into program_cycles history table
-      const { error: insertError } = await supabase
-        .from('program_cycles')
-        .insert({
-          enrollment_id: enrollmentId,
-          user_id: userId,
-          program_id: programId,
-          cycle_number: cycleNumber,
-          tasks_completed: tasksCompleted,
-          total_tasks: totalTasks,
-          completion_percentage: completionPercentage,
-          started_at: startedAt,
-          completed_at: new Date().toISOString()
-        });
-      if (insertError) throw insertError;
-      
+      // Call the atomic postgres function to complete enrollment
+      const { data, error } = await supabase.rpc('complete_enrollment_transaction', {
+        p_enrollment_id: enrollmentId,
+        p_user_id: userId,
+        p_program_id: programId,
+        p_cycle_number: cycleNumber,
+        p_tasks_completed: tasksCompleted,
+        p_total_tasks: totalTasks,
+        p_completion_percentage: completionPercentage,
+        p_started_at: startedAt
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && !data.success) {
+        throw new Error(data.error || 'Transaction failed');
+      }
+
       return { id: enrollmentId, status: 'completed' };
     },
     onSuccess: () => {

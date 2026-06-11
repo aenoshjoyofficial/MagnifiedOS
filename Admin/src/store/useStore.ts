@@ -81,6 +81,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     authSubscription = subscription;
 
+    // Clear any previous interval/listener before setting new ones
+    if (sessionRefreshInterval) {
+      clearInterval(sessionRefreshInterval);
+      sessionRefreshInterval = null;
+    }
+    if (visibilityChangeListener) {
+      document.removeEventListener('visibilitychange', visibilityChangeListener);
+      visibilityChangeListener = null;
+    }
+
+    // Auto-refresh the session every 5 minutes to keep it active
+    sessionRefreshInterval = setInterval(async () => {
+      try {
+        console.log('[AuthStore] Auto-refreshing admin session...');
+        await supabase.auth.getSession();
+      } catch (err) {
+        console.error('[AuthStore] Auto-refresh admin session error:', err);
+      }
+    }, 5 * 60 * 1000);
+
+    // Refresh session on visibility change (tab reactivation)
+    visibilityChangeListener = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[AuthStore] Admin tab active, refreshing session...');
+        try {
+          await supabase.auth.getSession();
+        } catch (err) {
+          console.error('[AuthStore] Session refresh on visibility change error:', err);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', visibilityChangeListener);
   },
 
   signIn: async (email, password) => {
