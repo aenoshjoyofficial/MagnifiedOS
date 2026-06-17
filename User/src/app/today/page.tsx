@@ -27,6 +27,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import AudioTask from '@/components/Tasks/AudioTask';
 import VideoTask from '@/components/Tasks/VideoTask';
 import TextTask from '@/components/Tasks/TextTask';
+import ImageTask from '@/components/Tasks/ImageTask';
+import PdfTask from '@/components/Tasks/PdfTask';
 import ChecklistTask from '@/components/Tasks/ChecklistTask';
 import { useAuthStore } from '@/store/useStore';
 import { useMyEnrollment, useCompleteTask, useCompleteEnrollment, useStartNewCycle } from '@/lib/queries';
@@ -893,6 +895,12 @@ const TaskCard = ({ task, index, isCompleted, isLocked, isPending, onComplete }:
       case 'video':
         return <VideoTask url={mainUrl || resourceUrl} onComplete={onComplete} disabled={isLocked || isPending} />;
       case 'text':
+        if (task.content?.format === 'image') {
+          return <ImageTask url={mainUrl || resourceUrl} description={task.content?.text || task.description} onComplete={onComplete} disabled={isLocked || isPending} />;
+        }
+        if (task.content?.format === 'pdf') {
+          return <PdfTask url={mainUrl || resourceUrl} description={task.content?.text || task.description} onComplete={onComplete} disabled={isLocked || isPending} />;
+        }
         return <TextTask content={task.content?.text || task.description} onComplete={onComplete} disabled={isLocked || isPending} />;
       case 'checklist':
         return task.content?.steps?.length > 0
@@ -1093,7 +1101,7 @@ const TaskCard = ({ task, index, isCompleted, isLocked, isPending, onComplete }:
           sx={{ mt: 3, pt: 3, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}
           onClick={(e) => e.stopPropagation()} // Prevent collapse when interacting with content
         >
-          {task.description && (
+          {task.description && task.type !== 'text' && (
             <Typography 
               variant="body1" 
               sx={{ 

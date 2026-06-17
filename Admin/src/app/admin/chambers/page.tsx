@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
-import { 
-  Box, 
-  Paper, 
-  Typography, 
-  Button, 
-  TextField, 
-  Select, 
-  MenuItem, 
-  FormControl, 
-  InputLabel, 
-  CircularProgress, 
-  Divider, 
-  IconButton, 
-  Stack, 
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  Box,
+  Paper,
+  Typography,
+  Button,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  CircularProgress,
+  Divider,
+  IconButton,
+  Stack,
   Grid,
   Dialog,
   DialogTitle,
@@ -22,13 +23,13 @@ import {
   Chip,
   LinearProgress
 } from '@mui/material';
-import { 
-  ArrowLeft, 
-  Plus, 
-  Trash2, 
-  CheckSquare, 
-  PlayCircle, 
-  Mic, 
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
+  CheckSquare,
+  PlayCircle,
+  Mic,
   FileText,
   Brain,
   Waves,
@@ -43,12 +44,12 @@ import {
   Unlock
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { 
-  usePrograms, 
-  useProgramDetails, 
-  useSaveModule, 
-  useSaveLesson, 
-  useSaveTask, 
+import {
+  usePrograms,
+  useProgramDetails,
+  useSaveModule,
+  useSaveLesson,
+  useSaveTask,
   useDeleteTask,
   useUploadAsset
 } from '@/lib/queries';
@@ -73,7 +74,8 @@ const getChamberIcon = (chamberId: string) => {
 const ChamberPage = () => {
   const { chamberId = 'mental-clarity' } = useParams<{ chamberId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  
+  const queryClient = useQueryClient();
+
   // Extract initial selections from URL parameters
   const [selectedProgramId, setSelectedProgramId] = useState<string>(searchParams.get('programId') || '');
   const dayNumber = 0; // Tasks in chambers are day-independent (Pool)
@@ -169,7 +171,7 @@ const ChamberPage = () => {
       const fileName = `chamber-task-${Date.now()}.${fileExt}`;
       const bucket = 'program-assets';
       const storagePath = `tasks/${fileName}`;
-      
+
       const publicUrl = await uploadAssetMutation.mutateAsync({
         file,
         bucket,
@@ -258,21 +260,21 @@ const ChamberPage = () => {
         return;
       }
       const taskIds = allChamberTasks.map((t: any) => t.id);
-      
+
       const { data, error } = await supabase
         .from('task_completions')
         .select('task_id')
         .in('task_id', taskIds);
-        
+
       if (error) {
         console.error('Error fetching completions:', error);
         return;
       }
-      
+
       const completedSet = new Set<string>(data.map((c: any) => c.task_id));
       setCompletedTaskIds(completedSet);
     };
-    
+
     fetchCompletions();
   }, [allChamberTasks]);
 
@@ -347,7 +349,7 @@ const ChamberPage = () => {
       const urlValue = contentUrl.trim();
       const isYoutubeOrVimeo = urlValue.includes('youtube.com') || urlValue.includes('youtu.be') || urlValue.includes('vimeo.com');
 
-      const stepsArray = taskType === 'checklist' 
+      const stepsArray = taskType === 'checklist'
         ? checklistSteps.split('\n').map(s => s.trim()).filter(Boolean)
         : [];
 
@@ -356,7 +358,7 @@ const ChamberPage = () => {
         title: taskTitle.trim(),
         description: taskDescription.trim(),
         type: dbType as any,
-        content: { 
+        content: {
           url: urlValue,
           resource_url: isYoutubeOrVimeo ? urlValue : '',
           format: taskType,
@@ -424,7 +426,7 @@ const ChamberPage = () => {
     setEditResourceUrl(task.content?.resource_url || '');
     setEditDuration(task.content?.duration || '');
     setEditIsUploading(false);
-    
+
     // Set edit checklist steps if task contains steps
     const stepsArray = task.content?.steps || [];
     setEditChecklistSteps(stepsArray.join('\n'));
@@ -457,7 +459,7 @@ const ChamberPage = () => {
       const fileName = `chamber-task-${Date.now()}.${fileExt}`;
       const bucket = 'program-assets';
       const storagePath = `tasks/${fileName}`;
-      
+
       const publicUrl = await uploadAssetMutation.mutateAsync({
         file,
         bucket,
@@ -505,6 +507,7 @@ const ChamberPage = () => {
     if (!editingTask || !editTitle.trim() || isSaving) return;
 
     setIsSaving(true);
+    console.log('SAVE STARTED');
     try {
       const saveExecution = async () => {
         const urlVal = editContentUrl.trim();
@@ -512,7 +515,7 @@ const ChamberPage = () => {
         const isYoutubeOrVimeo = urlVal.includes('youtube.com') || urlVal.includes('youtu.be') || urlVal.includes('vimeo.com') || resVal.includes('youtube.com') || resVal.includes('youtu.be') || resVal.includes('vimeo.com');
         const dbType = (editType === 'image' || editType === 'pdf') ? 'text' : editType;
 
-        const stepsArray = editType === 'checklist' 
+        const stepsArray = editType === 'checklist'
           ? editChecklistSteps.split('\n').map(s => s.trim()).filter(Boolean)
           : [];
 
@@ -538,7 +541,7 @@ const ChamberPage = () => {
             .eq('module_id', matchedModule.id);
 
           const lessonIds = moduleLessons?.map((l: any) => l.id) || [];
-          
+
           if (lessonIds.length > 0) {
             // Fetch siblings first to merge and preserve their existing routine_window
             const { data: siblingTasks } = await supabase
@@ -578,6 +581,7 @@ const ChamberPage = () => {
             }
           }
         }
+        console.log('SIBLINGS UPDATED');
 
         // 2. Update the primary editing task (triggers onSuccess/invalidation)
         await saveTaskMutation.mutateAsync({
@@ -589,6 +593,7 @@ const ChamberPage = () => {
           content: updatedContent,
           order_index: editingTask.order_index
         });
+        console.log('TASK UPDATED');
 
         // 3. Re-compile the routine HTML descriptions for all daily lessons in this module
         if (matchedModule?.id) {
@@ -645,15 +650,21 @@ const ChamberPage = () => {
             }
           }
         }
+        console.log('LESSONS UPDATED');
       };
 
       // Race save execution against a 15 second timeout to prevent indefinite hanging
       await Promise.race([
         saveExecution(),
-        new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Save request timed out. Please check your network and try again.')), 15000)
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Save request timed out. Please check your network and try again.')), 30000)
         )
       ]);
+
+      console.log('CACHE INVALIDATING...');
+      await queryClient.invalidateQueries({ queryKey: ['program-details'] });
+      console.log('CACHE INVALIDATED');
+      console.log('SAVE COMPLETED');
 
       // Close dialog
       setIsEditDialogOpen(false);
@@ -671,9 +682,9 @@ const ChamberPage = () => {
     <Box sx={{ p: 4, maxWidth: 1200, margin: '0 auto', minHeight: '80vh' }}>
       {/* Header Navigation */}
       <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Button 
-          component={Link} 
-          to="/admin/program-builder" 
+        <Button
+          component={Link}
+          to="/admin/program-builder"
           startIcon={<ArrowLeft size={16} />}
           sx={{ color: 'var(--emerald-primary)', textTransform: 'none', fontWeight: 600 }}
         >
@@ -740,8 +751,8 @@ const ChamberPage = () => {
             <Typography variant="body1" sx={{ mb: 2, fontWeight: 600 }}>
               This chamber's module is not yet initialized in the selected program.
             </Typography>
-            <Button 
-              variant="contained" 
+            <Button
+              variant="contained"
               onClick={handleInitializeModule}
               disabled={saveModuleMutation.isPending}
               sx={{ backgroundColor: 'var(--emerald-mid)', color: 'var(--emerald-primary)', fontWeight: 700 }}
@@ -754,7 +765,7 @@ const ChamberPage = () => {
             {/* Task Creation Form */}
             <Paper sx={{ p: 3, border: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: 'rgba(255, 255, 255, 0.01)' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 3 }}>Add New Task</Typography>
-              
+
               <Box component="form" onSubmit={handleAddTask}>
                 <Stack spacing={2.5}>
                   <TextField
@@ -837,10 +848,10 @@ const ChamberPage = () => {
                             onChange={handleFileChange}
                             accept={
                               taskType === 'audio' ? 'audio/*' :
-                              taskType === 'video' ? 'video/*' :
-                              taskType === 'image' ? 'image/*' :
-                              taskType === 'pdf' ? 'application/pdf' :
-                              '*/*'
+                                taskType === 'video' ? 'video/*' :
+                                  taskType === 'image' ? 'image/*' :
+                                    taskType === 'pdf' ? 'application/pdf' :
+                                      '*/*'
                             }
                           />
                         </Button>
@@ -864,9 +875,9 @@ const ChamberPage = () => {
                       variant="contained"
                       startIcon={saveTaskMutation.isPending ? <CircularProgress size={16} /> : <Plus size={16} />}
                       disabled={saveTaskMutation.isPending || saveLessonMutation.isPending}
-                      sx={{ 
-                        backgroundColor: 'var(--emerald-mid)', 
-                        color: 'var(--emerald-primary)', 
+                      sx={{
+                        backgroundColor: 'var(--emerald-mid)',
+                        color: 'var(--emerald-primary)',
                         fontWeight: 700,
                         '&.Mui-disabled': {
                           backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -895,12 +906,12 @@ const ChamberPage = () => {
               ) : (
                 <Stack spacing={2}>
                   {allChamberTasks.map((task: any) => (
-                    <Box 
+                    <Box
                       key={task.id}
-                      sx={{ 
-                        p: 2, 
-                        borderRadius: 2, 
-                        backgroundColor: 'rgba(255, 255, 255, 0.02)', 
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        backgroundColor: 'rgba(255, 255, 255, 0.02)',
                         border: '1px solid rgba(255, 255, 255, 0.05)',
                         display: 'flex',
                         alignItems: 'center',
@@ -918,10 +929,10 @@ const ChamberPage = () => {
                         <Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
                             <Typography variant="body2" sx={{ fontWeight: 700 }}>{task.title}</Typography>
-                            <Chip 
+                            <Chip
                               label={task.dayNumber === 0 ? "Chamber Pool" : `Day ${task.dayNumber}`}
                               size="small"
-                              sx={{ 
+                              sx={{
                                 backgroundColor: task.dayNumber === 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(212, 175, 55, 0.1)',
                                 color: task.dayNumber === 0 ? 'var(--emerald-primary)' : '#D4AF37',
                                 fontSize: '0.65rem',
@@ -931,11 +942,11 @@ const ChamberPage = () => {
                             />
                           </Box>
                           {task.description && (
-                            <Typography 
-                              variant="caption" 
-                              sx={{ 
-                                color: '#B0B0B0', 
-                                display: 'block', 
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: '#B0B0B0',
+                                display: 'block',
                                 mt: 0.5,
                                 '& ul, & ol': { pl: 2.5, my: 0.5 },
                                 '& p': { m: 0 }
@@ -949,38 +960,38 @@ const ChamberPage = () => {
 
                       <Box sx={{ display: 'flex', gap: 1 }}>
                         {completedTaskIds.has(task.id) && (
-                          <IconButton 
-                            size="small" 
+                          <IconButton
+                            size="small"
                             onClick={() => handleReopenTask(task.id)}
                             title="Reopen Task (Deletes user completion to unlock editing)"
-                            sx={{ 
-                              color: '#D4AF37', 
+                            sx={{
+                              color: '#D4AF37',
                               '&:hover': { color: '#FFD700' }
                             }}
                           >
                             <Unlock size={16} />
                           </IconButton>
                         )}
-                        <IconButton 
-                          size="small" 
+                        <IconButton
+                          size="small"
                           onClick={() => handleOpenEditDialog(task)}
                           disabled={completedTaskIds.has(task.id)}
                           title={completedTaskIds.has(task.id) ? "Task completed by user. Editing disabled." : "Edit Task"}
-                          sx={{ 
-                            color: 'rgba(255, 255, 255, 0.5)', 
+                          sx={{
+                            color: 'rgba(255, 255, 255, 0.5)',
                             '&:hover': { color: 'var(--emerald-primary)' },
                             '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.15)' }
                           }}
                         >
                           <Edit size={16} />
                         </IconButton>
-                        <IconButton 
-                          size="small" 
+                        <IconButton
+                          size="small"
                           onClick={() => handleDeleteTask(task.id)}
                           disabled={deleteTaskMutation.isPending || completedTaskIds.has(task.id)}
                           title={completedTaskIds.has(task.id) ? "Task completed by user. Deletion disabled." : "Delete Task"}
-                          sx={{ 
-                            color: 'rgba(244, 67, 54, 0.5)', 
+                          sx={{
+                            color: 'rgba(244, 67, 54, 0.5)',
                             '&:hover': { color: '#f44336' },
                             '&.Mui-disabled': { color: 'rgba(255, 255, 255, 0.15)' }
                           }}
@@ -998,8 +1009,8 @@ const ChamberPage = () => {
       </Stack>
 
       {/* Edit Task Dialog */}
-      <Dialog 
-        open={isEditDialogOpen} 
+      <Dialog
+        open={isEditDialogOpen}
         onClose={() => {
           setIsEditDialogOpen(false);
           setEditIsUploading(false);
@@ -1123,10 +1134,10 @@ const ChamberPage = () => {
                           onChange={handleEditFileChange}
                           accept={
                             editType === 'audio' ? 'audio/*' :
-                            editType === 'video' ? 'video/*' :
-                            editType === 'image' ? 'image/*' :
-                            editType === 'pdf' ? 'application/pdf' :
-                            '*/*'
+                              editType === 'video' ? 'video/*' :
+                                editType === 'image' ? 'image/*' :
+                                  editType === 'pdf' ? 'application/pdf' :
+                                    '*/*'
                           }
                         />
                       </Button>
@@ -1147,7 +1158,7 @@ const ChamberPage = () => {
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3, borderTop: '1px solid rgba(255, 255, 255, 0.08)', pt: 2 }}>
-            <Button 
+            <Button
               onClick={() => {
                 setIsEditDialogOpen(false);
                 setEditIsUploading(false);

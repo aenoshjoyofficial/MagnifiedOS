@@ -10,6 +10,11 @@ import dotenv from 'dotenv';
 // Load environment variables from root .env file
 dotenv.config();
 
+// Ensure node environment runs in production if configured
+if (process.env.VITE_APP_ENV === 'production' && !process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'production';
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
