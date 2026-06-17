@@ -63,6 +63,7 @@ app.use(
           "https://*.youtube.com",
           "https://player.vimeo.com",  // Vimeo embed player
           "https://vimeo.com",         // Vimeo direct links
+          "https://*.supabase.co"
         ],
         objectSrc: ["'none'"],
       },

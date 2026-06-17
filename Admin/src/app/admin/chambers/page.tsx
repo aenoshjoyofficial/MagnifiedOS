@@ -41,7 +41,9 @@ import {
   Award,
   Upload,
   Edit,
-  Unlock
+  Unlock,
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
@@ -82,16 +84,17 @@ const ChamberPage = () => {
 
   // Task creation form state
   const [taskTitle, setTaskTitle] = useState('');
-  const [taskType, setTaskType] = useState<'text' | 'audio' | 'video' | 'image' | 'pdf' | 'checklist'>('text');
+  const [taskType, setTaskType] = useState<string>('text');
   const [taskDescription, setTaskDescription] = useState('');
   const [contentUrl, setContentUrl] = useState('');
   const [checklistSteps, setChecklistSteps] = useState('');
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
 
   // Task editing form state
   const [editingTask, setEditingTask] = useState<any | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editTitle, setEditTitle] = useState('');
-  const [editType, setEditType] = useState<'text' | 'audio' | 'video' | 'image' | 'pdf' | 'checklist'>('text');
+  const [editType, setEditType] = useState<string>('text');
   const [editDescription, setEditDescription] = useState('');
   const [editContentUrl, setEditContentUrl] = useState('');
   const [editResourceUrl, setEditResourceUrl] = useState('');
@@ -100,9 +103,10 @@ const ChamberPage = () => {
   const [editIsUploading, setEditIsUploading] = useState(false);
   const [editUploadProgress, setEditUploadProgress] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [editGalleryImages, setEditGalleryImages] = useState<string[]>([]);
 
   // Placeholders mapping based on task type
-  const placeholders = {
+  const placeholders: Record<string, { title: string, url: string, description: string }> = {
     text: {
       title: "e.g. Daily Mindset Focus",
       url: "e.g. https://example.com/mindset-details (Optional)",
@@ -132,6 +136,11 @@ const ChamberPage = () => {
       title: "e.g. Daily Habits Checklist",
       url: "e.g. https://example.com/checklist-guide (Optional)",
       description: "e.g. Mark all items as complete to finish today's checklist"
+    },
+    gallery: {
+      title: "e.g. Somatic Flow Sequences",
+      url: "",
+      description: "e.g. View the visual steps for the spinal decompression gallery..."
     }
   };
 
@@ -204,6 +213,50 @@ const ChamberPage = () => {
       } else {
         alert(`Upload failed: ${errMsg}`);
       }
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(null);
+      e.target.value = '';
+    }
+  };
+
+  const handleGalleryFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    if (galleryImages.length + files.length > 20) {
+      alert("You can upload a maximum of 20 images per gallery.");
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      const newUrls: string[] = [];
+      const bucket = 'program-assets';
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setUploadProgress(Math.round((i / files.length) * 100));
+
+        const fileExt = file.name.split('.').pop() || '';
+        const fileName = `chamber-task-gallery-${Date.now()}-${i}.${fileExt}`;
+        const storagePath = `tasks/${fileName}`;
+
+        const publicUrl = await uploadAssetMutation.mutateAsync({
+          file,
+          bucket,
+          path: storagePath,
+        });
+        newUrls.push(publicUrl);
+      }
+
+      setGalleryImages(prev => [...prev, ...newUrls]);
+    } catch (err: any) {
+      console.error('Gallery upload failed:', err);
+      alert(`Gallery upload failed: ${err.message || err}`);
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
@@ -345,7 +398,7 @@ const ChamberPage = () => {
 
     // 2. Save the task
     try {
-      const dbType = (taskType === 'image' || taskType === 'pdf') ? 'text' : taskType;
+      const dbType = (taskType === 'image' || taskType === 'pdf' || taskType === 'gallery') ? 'text' : taskType;
       const urlValue = contentUrl.trim();
       const isYoutubeOrVimeo = urlValue.includes('youtube.com') || urlValue.includes('youtu.be') || urlValue.includes('vimeo.com');
 
@@ -353,17 +406,23 @@ const ChamberPage = () => {
         ? checklistSteps.split('\n').map(s => s.trim()).filter(Boolean)
         : [];
 
+      const taskContent: any = {
+        url: taskType === 'gallery' ? (galleryImages[0] || '') : urlValue,
+        resource_url: isYoutubeOrVimeo ? urlValue : '',
+        format: taskType,
+        steps: stepsArray
+      };
+
+      if (taskType === 'gallery') {
+        taskContent.images = galleryImages;
+      }
+
       await saveTaskMutation.mutateAsync({
         lesson_id: targetLessonId,
         title: taskTitle.trim(),
         description: taskDescription.trim(),
         type: dbType as any,
-        content: {
-          url: urlValue,
-          resource_url: isYoutubeOrVimeo ? urlValue : '',
-          format: taskType,
-          steps: stepsArray
-        },
+        content: taskContent,
         order_index: (matchedLesson?.tasks?.length || 0) + 1
       });
 
@@ -372,6 +431,7 @@ const ChamberPage = () => {
       setTaskDescription('');
       setContentUrl('');
       setChecklistSteps('');
+      setGalleryImages([]);
     } catch (err: any) {
       console.error('Failed to save task:', err);
       const errMsg = err?.message || err?.error_description || String(err);
@@ -430,6 +490,10 @@ const ChamberPage = () => {
     // Set edit checklist steps if task contains steps
     const stepsArray = task.content?.steps || [];
     setEditChecklistSteps(stepsArray.join('\n'));
+
+    // Set edit gallery images
+    const galleryImgs = task.content?.images || ((task.content?.format === 'image' || task.content?.format === 'gallery') && task.content?.url ? [task.content.url] : []);
+    setEditGalleryImages(galleryImgs);
 
     setIsEditDialogOpen(true);
   };
@@ -501,6 +565,50 @@ const ChamberPage = () => {
     }
   };
 
+  const handleEditGalleryFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    if (editGalleryImages.length + files.length > 20) {
+      alert("You can upload a maximum of 20 images per gallery.");
+      e.target.value = '';
+      return;
+    }
+
+    setEditIsUploading(true);
+    setEditUploadProgress(0);
+
+    try {
+      const newUrls: string[] = [];
+      const bucket = 'program-assets';
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setEditUploadProgress(Math.round((i / files.length) * 100));
+
+        const fileExt = file.name.split('.').pop() || '';
+        const fileName = `chamber-task-gallery-${Date.now()}-${i}.${fileExt}`;
+        const storagePath = `tasks/${fileName}`;
+
+        const publicUrl = await uploadAssetMutation.mutateAsync({
+          file,
+          bucket,
+          path: storagePath,
+        });
+        newUrls.push(publicUrl);
+      }
+
+      setEditGalleryImages(prev => [...prev, ...newUrls]);
+    } catch (err: any) {
+      console.error('Gallery upload failed:', err);
+      alert(`Gallery upload failed: ${err.message || err}`);
+    } finally {
+      setEditIsUploading(false);
+      setEditUploadProgress(null);
+      e.target.value = '';
+    }
+  };
+
   // Handle saving the task edits and syncing with siblings
   const handleSaveEdit = async (e?: React.FormEvent | React.MouseEvent) => {
     e?.preventDefault();
@@ -513,7 +621,7 @@ const ChamberPage = () => {
         const urlVal = editContentUrl.trim();
         const resVal = editResourceUrl.trim();
         const isYoutubeOrVimeo = urlVal.includes('youtube.com') || urlVal.includes('youtu.be') || urlVal.includes('vimeo.com') || resVal.includes('youtube.com') || resVal.includes('youtu.be') || resVal.includes('vimeo.com');
-        const dbType = (editType === 'image' || editType === 'pdf') ? 'text' : editType;
+        const dbType = (editType === 'image' || editType === 'pdf' || editType === 'gallery') ? 'text' : editType;
 
         const stepsArray = editType === 'checklist'
           ? editChecklistSteps.split('\n').map(s => s.trim()).filter(Boolean)
@@ -522,7 +630,7 @@ const ChamberPage = () => {
         // Build core updated content (preserve routine_window if exists)
         const updatedContent: any = {
           ...(editingTask.content || {}),
-          url: urlVal || (isYoutubeOrVimeo ? resVal : ''),
+          url: editType === 'gallery' ? (editGalleryImages[0] || '') : (urlVal || (isYoutubeOrVimeo ? resVal : '')),
           text: editDescription.trim(),
           format: editType,
           resource_url: isYoutubeOrVimeo ? resVal : '',
@@ -531,6 +639,12 @@ const ChamberPage = () => {
         };
         if (editingTask.content?.routine_window) {
           updatedContent.routine_window = editingTask.content.routine_window;
+        }
+
+        if (editType === 'gallery') {
+          updatedContent.images = editGalleryImages;
+        } else {
+          delete updatedContent.images;
         }
 
         // 1. Get sibling tasks inside the same module that share the pre-edited title
@@ -555,7 +669,7 @@ const ChamberPage = () => {
               const siblingUpdates = siblingTasks.map(async (sibling: any) => {
                 const siblingUpdatedContent = {
                   ...(sibling.content || {}),
-                  url: urlVal || (isYoutubeOrVimeo ? resVal : ''),
+                  url: editType === 'gallery' ? (editGalleryImages[0] || '') : (urlVal || (isYoutubeOrVimeo ? resVal : '')),
                   text: editDescription.trim(),
                   format: editType,
                   resource_url: isYoutubeOrVimeo ? resVal : '',
@@ -564,6 +678,12 @@ const ChamberPage = () => {
                 };
                 if (sibling.content?.routine_window) {
                   siblingUpdatedContent.routine_window = sibling.content.routine_window;
+                }
+
+                if (editType === 'gallery') {
+                  siblingUpdatedContent.images = editGalleryImages;
+                } else {
+                  delete siblingUpdatedContent.images;
                 }
 
                 const { error: updErr } = await supabase
@@ -791,6 +911,7 @@ const ChamberPage = () => {
                       <MenuItem value="video">Video Routine</MenuItem>
                       <MenuItem value="image">Image Protocol</MenuItem>
                       <MenuItem value="pdf">PDF Document</MenuItem>
+                      <MenuItem value="gallery">Image Gallery</MenuItem>
                       <MenuItem value="checklist">Checklist</MenuItem>
                     </Select>
                   </FormControl>
@@ -816,22 +937,91 @@ const ChamberPage = () => {
                     <RichTextEditor
                       value={taskDescription}
                       onChange={(val) => setTaskDescription(val)}
-                      placeholder={taskType === 'text' ? "Enter instructions, routines, formatting with headings/subheadings..." : placeholders[taskType].description}
+                      placeholder={taskType === 'text' ? "Enter instructions, routines, formatting with headings/subheadings..." : placeholders[taskType]?.description || ''}
                       maxLength={3000}
                     />
                   </Box>
 
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Resource Link / URL (Optional)"
-                    value={contentUrl}
-                    onChange={(e) => setContentUrl(e.target.value)}
-                    placeholder={placeholders[taskType].url}
-                    disabled={isUploading}
-                  />
+                  {taskType !== 'gallery' && (
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Resource Link / URL (Optional)"
+                      value={contentUrl}
+                      onChange={(e) => setContentUrl(e.target.value)}
+                      placeholder={placeholders[taskType]?.url || ''}
+                      disabled={isUploading}
+                    />
+                  )}
 
-                  {taskType !== 'text' && taskType !== 'checklist' && (
+                  {taskType === 'gallery' && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Button
+                          variant="outlined"
+                          component="label"
+                          startIcon={isUploading ? <CircularProgress size={16} /> : <Upload size={16} />}
+                          disabled={isUploading}
+                          sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}
+                        >
+                          {isUploading ? `Uploading... ${uploadProgress !== null ? `(${uploadProgress}%)` : ''}` : 'Upload Gallery Images'}
+                          <input
+                            type="file"
+                            hidden
+                            multiple
+                            onChange={handleGalleryFilesChange}
+                            accept="image/*"
+                          />
+                        </Button>
+                        {galleryImages.length > 0 && (
+                          <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 600 }}>
+                            ✓ {galleryImages.length} Images Uploaded
+                          </Typography>
+                        )}
+                      </Box>
+                      {isUploading && uploadProgress !== null && (
+                        <Box sx={{ width: '100%', mt: 0.5 }}>
+                          <LinearProgress variant="determinate" value={uploadProgress} sx={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.08)', '& .MuiLinearProgress-bar': { backgroundColor: 'var(--emerald-mid)' } }} />
+                        </Box>
+                      )}
+                      {galleryImages.length > 0 && (
+                        <Grid container spacing={1}>
+                          {galleryImages.map((imgUrl, idx) => (
+                            <Grid key={idx} size={{ xs: 3, sm: 2 }} style={{ position: 'relative' }}>
+                              <Box
+                                sx={{
+                                  width: '100%',
+                                  paddingBottom: '100%',
+                                  backgroundImage: `url(${imgUrl})`,
+                                  backgroundSize: 'cover',
+                                  backgroundPosition: 'center',
+                                  borderRadius: '8px',
+                                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                                }}
+                              />
+                              <IconButton
+                                size="small"
+                                onClick={() => setGalleryImages(prev => prev.filter((_, i) => i !== idx))}
+                                sx={{
+                                  position: 'absolute',
+                                  top: -4,
+                                  right: -4,
+                                  backgroundColor: 'rgba(0,0,0,0.8)',
+                                  color: '#ff4d4f',
+                                  p: 0.5,
+                                  '&:hover': { backgroundColor: 'rgba(0,0,0,0.95)' }
+                                }}
+                              >
+                                <X size={12} />
+                              </IconButton>
+                            </Grid>
+                          ))}
+                        </Grid>
+                      )}
+                    </Box>
+                  )}
+
+                  {taskType !== 'text' && taskType !== 'checklist' && taskType !== 'gallery' && (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Button
@@ -1058,6 +1248,7 @@ const ChamberPage = () => {
                   <MenuItem value="video">Video Routine</MenuItem>
                   <MenuItem value="image">Image Protocol</MenuItem>
                   <MenuItem value="pdf">PDF Document</MenuItem>
+                  <MenuItem value="gallery">Image Gallery</MenuItem>
                   <MenuItem value="checklist">Checklist</MenuItem>
                 </Select>
               </FormControl>
@@ -1099,60 +1290,133 @@ const ChamberPage = () => {
                     placeholder="e.g. 5 min"
                   />
 
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Attached URL / File Link"
-                    value={editContentUrl}
-                    onChange={(e) => setEditContentUrl(e.target.value)}
-                    placeholder={placeholders[editType]?.url}
-                    disabled={editIsUploading}
-                  />
+                  {editType !== 'gallery' && (
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Attached URL / File Link"
+                      value={editContentUrl}
+                      onChange={(e) => setEditContentUrl(e.target.value)}
+                      placeholder={placeholders[editType]?.url || ''}
+                      disabled={editIsUploading}
+                    />
+                  )}
 
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="External Reference Video/Page (e.g. YouTube/Vimeo)"
-                    value={editResourceUrl}
-                    onChange={(e) => setEditResourceUrl(e.target.value)}
-                    placeholder="e.g. https://youtube.com/watch?v=..."
-                  />
+                  {editType !== 'gallery' && (
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="External Reference Video/Page (e.g. YouTube/Vimeo)"
+                      value={editResourceUrl}
+                      onChange={(e) => setEditResourceUrl(e.target.value)}
+                      placeholder="e.g. https://youtube.com/watch?v=..."
+                    />
+                  )}
 
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Button
-                        variant="outlined"
-                        component="label"
-                        startIcon={editIsUploading ? <CircularProgress size={16} /> : <Upload size={16} />}
-                        disabled={editIsUploading}
-                        sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}
-                      >
-                        {editIsUploading ? `Uploading... ${editUploadProgress !== null ? `(${editUploadProgress}%)` : ''}` : `Upload New ${editType.toUpperCase()} File`}
-                        <input
-                          type="file"
-                          hidden
-                          onChange={handleEditFileChange}
-                          accept={
-                            editType === 'audio' ? 'audio/*' :
-                              editType === 'video' ? 'video/*' :
-                                editType === 'image' ? 'image/*' :
-                                  editType === 'pdf' ? 'application/pdf' :
-                                    '*/*'
-                          }
-                        />
-                      </Button>
-                      {editContentUrl && (
-                        <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 600 }}>
-                          ✓ File Attached
-                        </Typography>
+                  {editType === 'gallery' && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Button
+                          variant="outlined"
+                          component="label"
+                          startIcon={editIsUploading ? <CircularProgress size={16} /> : <Upload size={16} />}
+                          disabled={editIsUploading}
+                          sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}
+                        >
+                          {editIsUploading ? `Uploading... ${editUploadProgress !== null ? `(${editUploadProgress}%)` : ''}` : 'Upload Gallery Images'}
+                          <input
+                            type="file"
+                            hidden
+                            multiple
+                            onChange={handleEditGalleryFilesChange}
+                            accept="image/*"
+                          />
+                        </Button>
+                        {editGalleryImages.length > 0 && (
+                          <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 600 }}>
+                            ✓ {editGalleryImages.length} Images Uploaded
+                          </Typography>
+                        )}
+                      </Box>
+                      {editIsUploading && editUploadProgress !== null && (
+                        <Box sx={{ width: '100%', mt: 0.5 }}>
+                          <LinearProgress variant="determinate" value={editUploadProgress} sx={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.08)', '& .MuiLinearProgress-bar': { backgroundColor: 'var(--emerald-mid)' } }} />
+                        </Box>
+                      )}
+                      {editGalleryImages.length > 0 && (
+                        <Grid container spacing={1}>
+                          {editGalleryImages.map((imgUrl, idx) => (
+                            <Grid key={idx} size={{ xs: 3, sm: 2 }} style={{ position: 'relative' }}>
+                              <Box
+                                sx={{
+                                  width: '100%',
+                                  paddingBottom: '100%',
+                                  backgroundImage: `url(${imgUrl})`,
+                                  backgroundSize: 'cover',
+                                  backgroundPosition: 'center',
+                                  borderRadius: '8px',
+                                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                                }}
+                              />
+                              <IconButton
+                                size="small"
+                                onClick={() => setEditGalleryImages(prev => prev.filter((_, i) => i !== idx))}
+                                sx={{
+                                  position: 'absolute',
+                                  top: -8,
+                                  right: -8,
+                                  backgroundColor: 'rgba(0,0,0,0.8)',
+                                  color: '#ff4d4f',
+                                  p: 0.5,
+                                  '&:hover': { backgroundColor: 'rgba(0,0,0,0.95)' }
+                                }}
+                              >
+                                <X size={12} />
+                              </IconButton>
+                            </Grid>
+                          ))}
+                        </Grid>
                       )}
                     </Box>
-                    {editIsUploading && editUploadProgress !== null && (
-                      <Box sx={{ width: '100%', mt: 0.5 }}>
-                        <LinearProgress variant="determinate" value={editUploadProgress} sx={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.08)', '& .MuiLinearProgress-bar': { backgroundColor: 'var(--emerald-mid)' } }} />
+                  )}
+
+                  {editType !== 'gallery' && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Button
+                          variant="outlined"
+                          component="label"
+                          startIcon={editIsUploading ? <CircularProgress size={16} /> : <Upload size={16} />}
+                          disabled={editIsUploading}
+                          sx={{ color: 'var(--emerald-primary)', borderColor: 'var(--emerald-mid)' }}
+                        >
+                          {editIsUploading ? `Uploading... ${editUploadProgress !== null ? `(${editUploadProgress}%)` : ''}` : `Upload New ${editType.toUpperCase()} File`}
+                          <input
+                            type="file"
+                            hidden
+                            onChange={handleEditFileChange}
+                            accept={
+                              editType === 'audio' ? 'audio/*' :
+                                editType === 'video' ? 'video/*' :
+                                  editType === 'image' ? 'image/*' :
+                                    editType === 'pdf' ? 'application/pdf' :
+                                      '*/*'
+                            }
+                          />
+                        </Button>
+                        {editContentUrl && (
+                          <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 600 }}>
+                            ✓ File Attached
+                          </Typography>
+                        )}
                       </Box>
-                    )}
-                  </Box>
+                      {editIsUploading && editUploadProgress !== null && (
+                        <Box sx={{ width: '100%', mt: 0.5 }}>
+                          <LinearProgress variant="determinate" value={editUploadProgress} sx={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.08)', '& .MuiLinearProgress-bar': { backgroundColor: 'var(--emerald-mid)' } }} />
+                        </Box>
+                      )}
+                    </Box>
+                  )}
                 </>
               )}
             </Stack>

@@ -29,6 +29,7 @@ import VideoTask from '@/components/Tasks/VideoTask';
 import TextTask from '@/components/Tasks/TextTask';
 import ImageTask from '@/components/Tasks/ImageTask';
 import PdfTask from '@/components/Tasks/PdfTask';
+import GalleryTask from '@/components/Tasks/GalleryTask';
 import ChecklistTask from '@/components/Tasks/ChecklistTask';
 import { useAuthStore } from '@/store/useStore';
 import { useMyEnrollment, useCompleteTask, useCompleteEnrollment, useStartNewCycle } from '@/lib/queries';
@@ -895,6 +896,10 @@ const TaskCard = ({ task, index, isCompleted, isLocked, isPending, onComplete }:
       case 'video':
         return <VideoTask url={mainUrl || resourceUrl} onComplete={onComplete} disabled={isLocked || isPending} />;
       case 'text':
+        if (task.content?.format === 'gallery' || (task.content?.images && task.content.images.length > 0)) {
+          const galleryImages = task.content?.images || (mainUrl ? [mainUrl] : []);
+          return <GalleryTask images={galleryImages} description={task.content?.text || task.description} onComplete={onComplete} disabled={isLocked || isPending} />;
+        }
         if (task.content?.format === 'image') {
           return <ImageTask url={mainUrl || resourceUrl} description={task.content?.text || task.description} onComplete={onComplete} disabled={isLocked || isPending} />;
         }
