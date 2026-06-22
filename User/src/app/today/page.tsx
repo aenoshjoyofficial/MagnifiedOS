@@ -164,11 +164,11 @@ const TodayPractice = () => {
 
   React.useEffect(() => {
     if (enrollment) {
-      const isPastDay = viewedDay < daysSinceStart;
+      const isPastDay = viewedDay < daysSinceStart && viewedDay < totalDays;
       setIsDaySubmitted(isPastDay ? isDayComplete : false);
       setHasLoadedInitial(true);
     }
-  }, [enrollment, viewedDay, isDayComplete, daysSinceStart]);
+  }, [enrollment, viewedDay, isDayComplete, daysSinceStart, totalDays]);
 
   const { tasksCompleted, totalProgramTasks } = React.useMemo(() => {
     let total = 0;
