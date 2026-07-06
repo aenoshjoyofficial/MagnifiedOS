@@ -17,7 +17,9 @@ import {
   MenuItem, 
   CircularProgress,
   Tooltip,
-  Button
+  Button,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import { 
   CheckCircle2, 
@@ -38,12 +40,19 @@ const BookingsManager = () => {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [notification, setNotification] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({ open: false, message: '', severity: 'success' });
 
   const handleStatusUpdate = async (id: string, newStatus: string) => {
     try {
       await updateStatusMutation.mutateAsync({ id, status: newStatus });
-    } catch (err) {
+      setNotification({ open: true, message: 'Booking status updated successfully!', severity: 'success' });
+    } catch (err: any) {
       console.error('Failed to update status', err);
+      setNotification({ open: true, message: err?.message || 'Failed to update status.', severity: 'error' });
     }
   };
 
@@ -218,6 +227,26 @@ const BookingsManager = () => {
           </Table>
         </TableContainer>
       )}
+
+      <Snackbar 
+        open={notification.open} 
+        autoHideDuration={4000} 
+        onClose={() => setNotification(prev => ({ ...prev, open: false }))}
+      >
+        <Alert 
+          onClose={() => setNotification(prev => ({ ...prev, open: false }))} 
+          severity={notification.severity} 
+          sx={{ 
+            width: '100%', 
+            backgroundColor: notification.severity === 'error' ? '#ef5350' : notification.severity === 'warning' ? '#ff9800' : '#10B981', 
+            color: 'white',
+            fontWeight: 800,
+            borderRadius: '16px'
+          }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

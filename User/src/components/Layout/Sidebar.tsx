@@ -29,6 +29,15 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useUIStore, useAuthStore } from '@/store/useStore';
+import { useChambers } from '@/lib/queries';
+import { useProgramEngine } from '@/lib/programEngine';
+import * as LucideIcons from 'lucide-react';
+
+const getChamberIconComponent = (iconName: string | undefined) => {
+  if (!iconName) return LucideIcons.Brain;
+  const IconComp = (LucideIcons as any)[iconName];
+  return IconComp || LucideIcons.Brain;
+};
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -46,6 +55,11 @@ const Sidebar = () => {
   const { signOut } = useAuthStore();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  const { data: chambers } = useChambers();
+  const { user } = useAuthStore();
+  const engine = useProgramEngine(user?.id || '');
+  const activeChambers = engine.getVisibleChambers();
 
   const handleLogout = async () => {
     try {
@@ -180,6 +194,85 @@ const Sidebar = () => {
           );
         })}
       </List>
+
+      {activeChambers.length > 0 && (
+        <>
+          <Divider sx={{ my: 1.5, opacity: 0.1, backgroundColor: '#00D4A3' }} />
+          {isSidebarOpen && (
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                px: 3, 
+                pt: 1, 
+                pb: 1, 
+                display: 'block', 
+                color: 'rgba(0, 212, 163, 0.4)', 
+                fontWeight: 850, 
+                letterSpacing: 1.5, 
+                textTransform: 'uppercase',
+                fontSize: '0.7rem',
+                fontFamily: '"Outfit", sans-serif'
+              }}
+            >
+              Chambers
+            </Typography>
+          )}
+
+          <List sx={{ px: 1.5 }}>
+            {activeChambers.map((chamber) => {
+              const path = `/program?chamber=${chamber.slug}`;
+              const isActive = pathname === '/program' && location.search.includes(chamber.slug);
+              const Icon = getChamberIconComponent(chamber.icon);
+
+              return (
+                <ListItem key={chamber.id} disablePadding sx={{ display: 'block', mb: 0.5 }}>
+                  <Tooltip title={!isSidebarOpen ? chamber.title : ''} placement="right">
+                    <ListItemButton
+                      component={Link}
+                      to={path}
+                      sx={{
+                        minHeight: 40,
+                        justifyContent: isSidebarOpen ? 'initial' : 'center',
+                        px: 2.5,
+                        borderRadius: 2,
+                        backgroundColor: isActive ? 'rgba(0, 212, 163, 0.08)' : 'transparent',
+                        color: isActive ? '#00D4A3' : '#B0B0B0',
+                        '&:hover': {
+                          backgroundColor: 'rgba(0, 212, 163, 0.04)',
+                        },
+                      }}
+                    >
+                      <ListItemIcon
+                        sx={{
+                          minWidth: 0,
+                          mr: isSidebarOpen ? 2 : 'auto',
+                          justifyContent: 'center',
+                          color: isActive ? '#00D4A3' : 'inherit',
+                        }}
+                      >
+                        <Icon size={20} />
+                      </ListItemIcon>
+                      {isSidebarOpen && (
+                        <ListItemText 
+                          primary={chamber.title} 
+                          slotProps={{
+                            primary: { 
+                              sx: {
+                                fontWeight: isActive ? 600 : 400,
+                                fontSize: '0.85rem'
+                              }
+                            }
+                          }} 
+                        />
+                      )}
+                    </ListItemButton>
+                  </Tooltip>
+                </ListItem>
+              );
+            })}
+          </List>
+        </>
+      )}
 
       <Box sx={{ mt: 'auto', mb: 2, px: 1.5 }}>
         <Divider sx={{ mb: 2, opacity: 0.1, backgroundColor: '#D4AF37' }} />

@@ -18,15 +18,17 @@ import {
   CheckCircle2, 
   PlayCircle 
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/store/useStore';
-import { useMyEnrollment } from '@/lib/queries';
+import { useMyEnrollment, useChambers } from '@/lib/queries';
+import { useProgramEngine } from '@/lib/programEngine';
 import { supabase } from '@/lib/supabase';
-import { calculateDaysSinceStart, calculateActiveDay, isLessonLocked as isLessonLockedHelper } from '@/lib/progression';
+import { isLessonLocked as isLessonLockedHelper } from '@/lib/progression';
 
 const MyProgram = () => {
   const { user } = useAuthStore();
   const [targetUserId, setTargetUserId] = React.useState<string | null>(user?.id || null);
+  const [searchParams] = useSearchParams();
 
   React.useEffect(() => {
     const findUserId = async () => {
@@ -34,74 +36,28 @@ const MyProgram = () => {
         setTargetUserId(user.id);
         return;
       }
-      // No hardcoded email fallback - unauthenticated users are handled by AuthGuard
     };
     findUserId();
   }, [user]);
 
-  const { data: enrollment, isLoading } = useMyEnrollment(targetUserId || '');
+  const engine = useProgramEngine(targetUserId || '');
+  const isLoading = engine.isLoading;
 
-  const program = enrollment?.programs;
-  const completions = enrollment?.task_completions || [];
-  
-  // Create a map of task ID to its title and day number for easy lookup
-  const taskMap = React.useMemo(() => {
-    const map: Record<string, { title: string; dayNumber: number }> = {};
-    program?.modules?.forEach((mod: any) => {
-      mod.lessons?.forEach((les: any) => {
-        les.tasks?.forEach((task: any) => {
-          map[task.id] = {
-            title: task.title,
-            dayNumber: les.day_number
-          };
-        });
-      });
-    });
-    return map;
-  }, [program]);
-
-  const completedKeys = React.useMemo(() => {
-    const keys = new Set<string>();
-    completions.forEach((c: any) => {
-      const tInfo = taskMap[c.task_id];
-      if (tInfo) {
-        keys.add(`${tInfo.dayNumber}_${tInfo.title}`);
-      }
-    });
-    return keys;
-  }, [completions, taskMap]);
-
-  // Time-based calendar tracking using America/New_York (Eastern Time)
-  const daysSinceStart = React.useMemo(() => {
-    return calculateDaysSinceStart(enrollment?.started_at);
-  }, [enrollment?.started_at]);
+  const enrollment = engine.enrollment;
+  const program = engine.program;
+  const chambers = engine.chambers;
+  const sortedFilteredModules = engine.visibleModules;
+  const completedKeys = engine.completedKeys;
+  const daysSinceStart = engine.daysSinceStart;
 
   // A lesson locking status using shared helper
   const isLessonLocked = React.useCallback((lesson: any) => {
-    return isLessonLockedHelper(lesson, program, completedKeys, daysSinceStart);
-  }, [program, completedKeys, daysSinceStart]);
+    return isLessonLockedHelper(lesson, { modules: sortedFilteredModules }, completedKeys, daysSinceStart);
+  }, [sortedFilteredModules, completedKeys, daysSinceStart]);
 
   // Calculate current active progression day (excluding Day 0)
-  const currentDay = React.useMemo(() => {
-    return calculateActiveDay(program, completedKeys, daysSinceStart);
-  }, [program, completedKeys, daysSinceStart]);
+  const currentDay = engine.activeDay;
 
-  if (isLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-        <CircularProgress sx={{ color: '#D4AF37' }} />
-      </Box>
-    );
-  }
-
-  if (!enrollment) {
-    return (
-      <Box sx={{ p: 4, textAlign: 'center' }}>
-        <Typography variant="h5">No active program found.</Typography>
-        <Typography variant="body2" sx={{ color: '#666', mt: 1 }}>Please enroll in a program from the admin panel.</Typography>
-      </Box>
-    );
-  }
 
   // Logic to determine status for modules and days
   const getModuleStatus = (module: any) => {
@@ -134,6 +90,54 @@ const MyProgram = () => {
     if (completedTasks.length === tasks.length) return 'completed';
     return 'active';
   };
+
+  const [expandedModule, setExpandedModule] = React.useState<string | false>(false);
+
+  React.useEffect(() => {
+    const chamberQuery = searchParams.get('chamber');
+    if (chamberQuery && sortedFilteredModules) {
+      const matchedMod = sortedFilteredModules.find((mod: any) => {
+        const foundChamber = engine.getChamberForModule(mod);
+        return foundChamber && foundChamber.slug === chamberQuery;
+      });
+      
+      if (matchedMod) {
+        setExpandedModule(matchedMod.id);
+        setTimeout(() => {
+          const el = document.getElementById(`module-${matchedMod.id}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 300);
+      }
+    } else if (sortedFilteredModules) {
+      const activeMod = sortedFilteredModules.find((mod: any) => getModuleStatus(mod) === 'active');
+      if (activeMod) {
+        setExpandedModule(activeMod.id);
+      } else {
+        setExpandedModule(sortedFilteredModules[0]?.id || false);
+      }
+    }
+  }, [searchParams, enrollment, engine, sortedFilteredModules]);
+
+
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+        <CircularProgress sx={{ color: '#D4AF37' }} />
+      </Box>
+    );
+  }
+
+  if (!enrollment) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center' }}>
+        <Typography variant="h5">No active program found.</Typography>
+        <Typography variant="body2" sx={{ color: '#666', mt: 1 }}>Please enroll in a program from the admin panel.</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', py: 5, px: { xs: 2.5, sm: 4, md: 0 }, position: 'relative' }}>
@@ -196,12 +200,16 @@ const MyProgram = () => {
       </Box>
 
       <Stack spacing={0}>
-        {program.modules.map((module: any) => {
+        {sortedFilteredModules.map((module: any) => {
           const status = getModuleStatus(module);
           return (
             <Accordion 
               key={module.id} 
-              defaultExpanded={status === 'active'}
+              id={`module-${module.id}`}
+              expanded={expandedModule === module.id}
+              onChange={(e, isExpanded) => {
+                setExpandedModule(isExpanded ? module.id : false);
+              }}
               sx={{ 
                 backgroundColor: status === 'locked' ? 'rgba(11, 59, 50, 0.04)' : 'rgba(7, 24, 21, 0.4)',
                 backdropFilter: 'blur(20px)',

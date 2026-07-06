@@ -34,7 +34,8 @@ import {
   ListItemIcon, 
   ListItemText,
   CircularProgress,
-  Alert
+  Alert,
+  Snackbar
 } from '@mui/material';
 import { 
   Search, 
@@ -58,6 +59,11 @@ const UserManagement = () => {
   // Live Data Hooks
   const { data: users, isLoading: isLoadingUsers, error: usersError } = useUsers();
   const { data: programs, isLoading: isLoadingPrograms } = usePrograms();
+  const [notification, setNotification] = React.useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({ open: false, message: '', severity: 'success' });
   const enrollUserMutation = useEnrollUser();
   const createUserMutation = useCreateUser();
   const updateUserMutation = useUpdateUser();
@@ -146,9 +152,11 @@ const UserManagement = () => {
           email: editUser.email
         }
       });
+      setNotification({ open: true, message: 'User profile updated successfully!', severity: 'success' });
       handleCloseEdit();
     } catch (err: any) {
       setFormError(err.message || 'Failed to update user.');
+      setNotification({ open: true, message: err.message || 'Failed to update user.', severity: 'error' });
     }
   };
 
@@ -170,7 +178,7 @@ const UserManagement = () => {
         fullName: newUser.name,
         programId: newUser.programId
       });
-      
+      setNotification({ open: true, message: 'New user registered successfully!', severity: 'success' });
       handleCloseAddUser();
       setNewUser({
         name: '',
@@ -643,10 +651,30 @@ const UserManagement = () => {
             {updateUserMutation.isPending ? 'Saving...' : 'Save Changes'}
           </Button>
         </DialogActions>
-      </Dialog>
-    </Box>
-  );
-};
+       </Dialog>
+
+      <Snackbar 
+        open={notification.open} 
+        autoHideDuration={4000} 
+        onClose={() => setNotification(prev => ({ ...prev, open: false }))}
+      >
+        <Alert 
+          onClose={() => setNotification(prev => ({ ...prev, open: false }))} 
+          severity={notification.severity} 
+          sx={{ 
+            width: '100%', 
+            backgroundColor: notification.severity === 'error' ? '#ef5350' : notification.severity === 'warning' ? '#ff9800' : '#10B981', 
+            color: 'white',
+            fontWeight: 800,
+            borderRadius: '16px'
+          }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
+     </Box>
+   );
+ };
 
 export default UserManagement;
 

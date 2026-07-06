@@ -20,9 +20,9 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/store/useStore';
-import { useMyEnrollment, useMyLastCompletedEnrollment, useStartNewCycle } from '@/lib/queries';
+import { useMyLastCompletedEnrollment, useStartNewCycle } from '@/lib/queries';
+import { useProgramEngine } from '@/lib/programEngine';
 import { supabase } from '@/lib/supabase';
-import { calculateDaysSinceStart, calculateActiveDay } from '@/lib/progression';
 
 const Dashboard = () => {
   const { user } = useAuthStore();
@@ -40,16 +40,26 @@ const Dashboard = () => {
           .single();
         if (data) setProfile(data);
       }
-      // No fallback to hardcoded email - if user is not authenticated, show empty state
     };
     findUserId();
   }, [user]);
 
-  const { data: enrollment, isLoading: isActiveLoading } = useMyEnrollment(targetUserId || '');
   const { data: completedEnrollment, isLoading: isCompletedLoading } = useMyLastCompletedEnrollment(targetUserId || '');
   const startNewCycleMutation = useStartNewCycle();
 
-  const isLoading = isActiveLoading || isCompletedLoading;
+  const engine = useProgramEngine(targetUserId || '');
+  const isLoading = engine.isLoading || isCompletedLoading;
+
+  const enrollment = engine.enrollment;
+  const program = engine.program;
+
+  const {
+    currentDay,
+    totalDays,
+    progressPercent,
+    prevIncompleteDaysCount
+  } = engine.getProgramSummary();
+  const currentStreak = engine.currentStreak;
 
   const getTimeGreeting = () => {
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -63,164 +73,6 @@ const Dashboard = () => {
     if (hour < 18) return 'Afternoon';
     return 'Evening';
   };
-
-  const program = enrollment?.programs;
-  const completions = enrollment?.task_completions || [];
-
-  // Build a map of taskId to title and dayNumber, including Day 0 tasks for progress percentages
-  const taskMap = React.useMemo(() => {
-    const map: Record<string, { title: string; dayNumber: number }> = {};
-    program?.modules?.forEach((mod: any) => {
-      mod.lessons?.forEach((les: any) => {
-        les.tasks?.forEach((task: any) => {
-          map[task.id] = {
-            title: task.title,
-            dayNumber: les.day_number || 0
-          };
-        });
-      });
-    });
-    return map;
-  }, [program]);
-
-  // Calculate streak from real task completion dates, excluding Day 0
-  const calculateStreak = React.useCallback(() => {
-    const validCompletions = completions.filter((c: any) => {
-      const tInfo = taskMap[c.task_id];
-      return tInfo && tInfo.dayNumber >= 1;
-    });
-
-    if (validCompletions.length === 0) return 0;
-
-    const formatNYDate = (d: Date) => {
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-      });
-      const parts = formatter.formatToParts(d);
-      const y = parts.find(p => p.type === 'year')!.value;
-      const m = parts.find(p => p.type === 'month')!.value;
-      const day = parts.find(p => p.type === 'day')!.value;
-      return `${y}-${m.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    };
-
-    const getNYMidnight = (d: Date) => {
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-      });
-      const parts = formatter.formatToParts(d);
-      const year = parseInt(parts.find(p => p.type === 'year')!.value, 10);
-      const month = parseInt(parts.find(p => p.type === 'month')!.value, 10) - 1; // 0-indexed
-      const day = parseInt(parts.find(p => p.type === 'day')!.value, 10);
-      return new Date(Date.UTC(year, month, day));
-    };
-
-    // Collect unique calendar dates (YYYY-MM-DD) from completions in Eastern Time
-    const dates = [...new Set(
-      validCompletions.map((c: any) => {
-        return formatNYDate(new Date(c.completed_at));
-      })
-    )] as string[];
-    dates.sort().reverse(); // Most recent first
-
-    // Build today and yesterday with time zeroed out in Eastern Time
-    const todayNYDate = getNYMidnight(new Date());
-    const today = formatNYDate(todayNYDate);
-
-    const yesterdayNYDate = new Date(todayNYDate);
-    yesterdayNYDate.setDate(todayNYDate.getDate() - 1);
-    const yesterday = formatNYDate(yesterdayNYDate);
-
-    // Streak is broken if no completions today or yesterday in Eastern Time
-    if (dates[0] !== today && dates[0] !== yesterday) return 0;
-
-    // Count consecutive days going backward from the most recent completion
-    let streak = 0;
-    const baseDate = new Date(dates[0] + 'T00:00:00');
-    for (let i = 0; i < dates.length; i++) {
-      const expectedDate = new Date(baseDate);
-      expectedDate.setDate(baseDate.getDate() - i);
-      const expected = expectedDate.toISOString().split('T')[0];
-
-      if (dates[i] === expected) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-    return streak;
-  }, [completions, taskMap]);
-
-  const currentStreak = calculateStreak();
-  
-  // Build completedKeys and total count, including Day 0 tasks
-  const { totalTasks, completedCount, completedKeys } = React.useMemo(() => {
-    const allTaskKeys = new Set<string>();
-    
-    program?.modules?.forEach((mod: any) => {
-      mod.lessons?.forEach((les: any) => {
-        les.tasks?.forEach((task: any) => {
-          allTaskKeys.add(`${les.day_number}_${task.title}`);
-        });
-      });
-    });
-    
-    const completedKeys = new Set<string>();
-    completions.forEach((c: any) => {
-      const tInfo = taskMap[c.task_id];
-      if (tInfo) {
-        completedKeys.add(`${tInfo.dayNumber}_${tInfo.title}`);
-      }
-    });
-    
-    return {
-      totalTasks: allTaskKeys.size || 1, // Fallback to avoid division by zero
-      completedCount: completedKeys.size,
-      completedKeys
-    };
-  }, [program, completions, taskMap]);
-
-  const progressPercent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
-  
-  // Dynamic Duration: Max day_number from lessons
-  const totalDays = program?.modules?.reduce((acc: number, mod: any) => {
-    const maxModDay = mod.lessons?.reduce((lMax: number, lesson: any) => Math.max(lMax, lesson.day_number || 0), 0) || 0;
-    return Math.max(acc, maxModDay);
-  }, 0) || program?.duration_days || 30;
-
-  // Current calendar days since start in NY time
-  const calendarDays = React.useMemo(() => {
-    return calculateDaysSinceStart(enrollment?.started_at);
-  }, [enrollment?.started_at]);
-
-  // Current active day calculation (excluding Day 0)
-  const currentDay = React.useMemo(() => {
-    return calculateActiveDay(program, completedKeys, calendarDays);
-  }, [program, completedKeys, calendarDays]);
-
-  // Count how many previous days (Day 1 to currentDay - 1) contain incomplete tasks
-  const prevIncompleteDaysCount = React.useMemo(() => {
-    if (!program?.modules || currentDay <= 1) return 0;
-
-    const allLessons = program.modules.flatMap((m: any) => m.lessons || []) || [];
-    const pastLessons = allLessons.filter((l: any) => l.day_number >= 1 && l.day_number < currentDay);
-
-    let incompleteCount = 0;
-    pastLessons.forEach((l: any) => {
-      const tasks = l.tasks || [];
-      if (tasks.length === 0) return;
-      const completed = tasks.filter((t: any) => completedKeys.has(`${l.day_number}_${t.title}`));
-      if (completed.length < tasks.length) {
-        incompleteCount++;
-      }
-    });
-    return incompleteCount;
-  }, [program, completedKeys, currentDay]);
 
   if (isLoading) {
     return (

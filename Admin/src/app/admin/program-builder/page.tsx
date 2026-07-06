@@ -208,7 +208,7 @@ const ProgramBuilder = () => {
           .in('task_id', taskIds);
         
         if (completions && completions.length > 0) {
-          alert('Some tasks for this day have already been completed by a user. Deletion is disabled.');
+          setNotification({ open: true, message: 'Some tasks for this day have already been completed by a user. Deletion is disabled.', severity: 'warning' });
           return;
         }
       }
@@ -283,7 +283,7 @@ const ProgramBuilder = () => {
           .in('task_id', tasksToDelete);
         
         if (completions && completions.length > 0) {
-          alert(`Some tasks on Day ${dayNum} are already completed by a user. Cannot delete this day.`);
+          setNotification({ open: true, message: `Some tasks on Day ${dayNum} are already completed by a user. Cannot delete this day.`, severity: 'warning' });
           return;
         }
 
@@ -337,7 +337,7 @@ const ProgramBuilder = () => {
           .in('task_id', taskIds);
         
         if (completions && completions.length > 0) {
-          alert('Some tasks in this window have already been completed by a user. Clearing is disabled.');
+          setNotification({ open: true, message: 'Some tasks in this window have already been completed by a user. Clearing is disabled.', severity: 'warning' });
           return;
         }
       }
@@ -525,7 +525,7 @@ const ProgramBuilder = () => {
         .eq('task_id', task.id);
       
       if (completions && completions.length > 0) {
-        alert('This task has already been completed by a user. Moving or re-allotting is disabled.');
+        setNotification({ open: true, message: 'This task has already been completed by a user. Moving or re-allotting is disabled.', severity: 'warning' });
         return;
       }
 
@@ -626,7 +626,7 @@ const ProgramBuilder = () => {
         .eq('task_id', taskId);
       
       if (completions && completions.length > 0) {
-        alert('This task has already been completed by a user. Moving is disabled.');
+        setNotification({ open: true, message: 'This task has already been completed by a user. Moving is disabled.', severity: 'warning' });
         return;
       }
 
@@ -854,7 +854,7 @@ const ProgramBuilder = () => {
     }
   }, [programId, programDetails]); // Only sync when programId changes or details first load
 
-  const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'warning' | 'info' });
 
   const handleSave = async (overrides: any = {}) => {
     // Prevent saving if title is empty (unless we are passing a title in overrides)
@@ -1022,11 +1022,11 @@ const ProgramBuilder = () => {
 
   const handleCoverImageUpload = async (file: File) => {
     if (file.size > 50 * 1024 * 1024) {
-      alert(
-        `Warning: The file you selected is ${(file.size / 1024 / 1024).toFixed(1)} MB.\n\n` +
-        `Cover image files should normally be smaller (under 50 MB) to optimize page loading speed.\n\n` +
-        `Please choose a smaller image file.`
-      );
+      setNotification({
+        open: true,
+        message: `Warning: The file you selected is ${(file.size / 1024 / 1024).toFixed(1)} MB. Cover image files should normally be smaller (under 50 MB) to optimize page loading speed.`,
+        severity: 'warning'
+      });
       return;
     }
 
@@ -1180,21 +1180,34 @@ const ProgramBuilder = () => {
         return;
       }
     }
-
     setIsInitializing(true);
     setInitProgress(0);
-    const chambersList = [
-      'MENTAL CLARITY',
-      'THE FREQUENCY FIELD',
-      'FIELD DESIGN',
-      'THE LIVING FRAME',
-      'THE PLATE',
-      'SLEEP COCOON',
-      'BREATH ATELIER',
-      'THE SIGNATURE'
-    ];
 
     try {
+      let chambersList = [
+        'MENTAL CLARITY',
+        'THE FREQUENCY FIELD',
+        'FIELD DESIGN',
+        'THE LIVING FRAME',
+        'THE PLATE',
+        'SLEEP COCOON',
+        'BREATH ATELIER',
+        'THE SIGNATURE'
+      ];
+
+      try {
+        const { data: dbChambers, error } = await supabase
+          .from('chambers')
+          .select('title')
+          .order('display_order', { ascending: true });
+        
+        if (!error && dbChambers && dbChambers.length > 0) {
+          chambersList = dbChambers.map(c => c.title.toUpperCase());
+        }
+      } catch (dbErr) {
+        console.warn('Could not load chambers dynamically, using hardcoded fallback list:', dbErr);
+      }
+
       const initializedModules: any[] = [];
 
       for (let i = 0; i < chambersList.length; i++) {

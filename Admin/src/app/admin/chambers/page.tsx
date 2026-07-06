@@ -21,7 +21,9 @@ import {
   DialogContent,
   DialogActions,
   Chip,
-  LinearProgress
+  LinearProgress,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import {
   ArrowLeft,
@@ -104,6 +106,11 @@ const ChamberPage = () => {
   const [editUploadProgress, setEditUploadProgress] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [editGalleryImages, setEditGalleryImages] = useState<string[]>([]);
+  const [notification, setNotification] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'warning' | 'info';
+  }>({ open: false, message: '', severity: 'success' });
 
   // Placeholders mapping based on task type
   const placeholders: Record<string, { title: string, url: string, description: string }> = {
@@ -203,15 +210,17 @@ const ChamberPage = () => {
       console.error('Upload failed:', err);
       const errMsg = err?.message || err?.error_description || String(err);
       if (errMsg.includes('exceeded the maximum allowed size') || errMsg.includes('exceed')) {
-        alert(
-          `Upload failed: The file size (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the maximum allowed size.\n\n` +
-          `IMPORTANT: While you updated the bucket limit in your Supabase dashboard, please ensure that you have also increased the project-level file size limit in your Supabase Storage settings (up to 1000 MB or higher).\n\n` +
-          `To fix this:\n` +
-          `1. Ensure the file size is within your configured Supabase Storage limit, OR\n` +
-          `2. Increase the maximum file size limit in your Supabase Storage settings.`
-        );
+        setNotification({
+          open: true,
+          severity: 'error',
+          message: `Upload failed: The file size (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the maximum allowed size. Please check your Supabase project-level file size limits.`
+        });
       } else {
-        alert(`Upload failed: ${errMsg}`);
+        setNotification({
+          open: true,
+          severity: 'error',
+          message: `Upload failed: ${errMsg}`
+        });
       }
     } finally {
       setIsUploading(false);
@@ -225,7 +234,11 @@ const ChamberPage = () => {
     if (files.length === 0) return;
 
     if (galleryImages.length + files.length > 20) {
-      alert("You can upload a maximum of 20 images per gallery.");
+      setNotification({
+        open: true,
+        severity: 'warning',
+        message: "You can upload a maximum of 20 images per gallery."
+      });
       e.target.value = '';
       return;
     }
@@ -256,7 +269,11 @@ const ChamberPage = () => {
       setGalleryImages(prev => [...prev, ...newUrls]);
     } catch (err: any) {
       console.error('Gallery upload failed:', err);
-      alert(`Gallery upload failed: ${err.message || err}`);
+      setNotification({
+        open: true,
+        severity: 'error',
+        message: `Gallery upload failed: ${err.message || err}`
+      });
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
@@ -379,7 +396,11 @@ const ChamberPage = () => {
     // 1. Auto-create lesson if it doesn't exist yet
     if (!targetLessonId) {
       if (!matchedModule) {
-        alert('Please initialize the Chamber Module first before adding tasks.');
+        setNotification({
+          open: true,
+          severity: 'warning',
+          message: 'Please initialize the Chamber Module first before adding tasks.'
+        });
         return;
       }
       try {
@@ -426,6 +447,12 @@ const ChamberPage = () => {
         order_index: (matchedLesson?.tasks?.length || 0) + 1
       });
 
+      setNotification({
+        open: true,
+        severity: 'success',
+        message: 'Task created successfully!'
+      });
+
       // Clear form
       setTaskTitle('');
       setTaskDescription('');
@@ -435,7 +462,11 @@ const ChamberPage = () => {
     } catch (err: any) {
       console.error('Failed to save task:', err);
       const errMsg = err?.message || err?.error_description || String(err);
-      alert(`Failed to save task: ${errMsg}`);
+      setNotification({
+        open: true,
+        severity: 'error',
+        message: `Failed to save task: ${errMsg}`
+      });
     }
   };
 
@@ -444,6 +475,11 @@ const ChamberPage = () => {
     if (window.confirm('Are you sure you want to delete this task?')) {
       try {
         await deleteTaskMutation.mutateAsync(taskId);
+        setNotification({
+          open: true,
+          severity: 'success',
+          message: 'Task deleted successfully!'
+        });
       } catch (err) {
         console.error('Failed to delete task:', err);
       }
@@ -468,10 +504,18 @@ const ChamberPage = () => {
           return updated;
         });
 
-        alert('Task successfully reopened and unlocked.');
+        setNotification({
+          open: true,
+          severity: 'success',
+          message: 'Task successfully reopened and unlocked.'
+        });
       } catch (err: any) {
         console.error('Failed to reopen task:', err);
-        alert(`Failed to reopen task: ${err.message || String(err)}`);
+        setNotification({
+          open: true,
+          severity: 'error',
+          message: `Failed to reopen task: ${err.message || String(err)}`
+        });
       }
     }
   };
@@ -648,6 +692,7 @@ const ChamberPage = () => {
         }
 
         // 1. Get sibling tasks inside the same module that share the pre-edited title
+        let siblingLessonIds: string[] = [];
         if (matchedModule?.id) {
           const { data: moduleLessons } = await supabase
             .from('lessons')
@@ -660,12 +705,13 @@ const ChamberPage = () => {
             // Fetch siblings first to merge and preserve their existing routine_window
             const { data: siblingTasks } = await supabase
               .from('tasks')
-              .select('id, content')
+              .select('id, content, lesson_id')
               .in('lesson_id', lessonIds)
               .eq('title', editingTask.title)
               .neq('id', editingTask.id);
 
             if (siblingTasks && siblingTasks.length > 0) {
+              siblingLessonIds = siblingTasks.map((s: any) => s.lesson_id).filter(Boolean);
               const siblingUpdates = siblingTasks.map(async (sibling: any) => {
                 const siblingUpdatedContent = {
                   ...(sibling.content || {}),
@@ -715,8 +761,9 @@ const ChamberPage = () => {
         });
         console.log('TASK UPDATED');
 
-        // 3. Re-compile the routine HTML descriptions for all daily lessons in this module
-        if (matchedModule?.id) {
+        // 3. Re-compile the routine HTML descriptions for only the affected daily lessons
+        const affectedLessonIds = Array.from(new Set([editingTask.lesson_id, ...siblingLessonIds]));
+        if (affectedLessonIds.length > 0) {
           const { data: lessonsWithTasks } = await supabase
             .from('lessons')
             .select(`
@@ -725,7 +772,7 @@ const ChamberPage = () => {
               day_number,
               tasks (*)
             `)
-            .eq('module_id', matchedModule.id)
+            .in('id', affectedLessonIds)
             .gt('day_number', 0);
 
           if (lessonsWithTasks && lessonsWithTasks.length > 0) {
@@ -787,12 +834,21 @@ const ChamberPage = () => {
       console.log('SAVE COMPLETED');
 
       // Close dialog
+      setNotification({
+        open: true,
+        severity: 'success',
+        message: 'Task updated successfully!'
+      });
       setIsEditDialogOpen(false);
       setEditingTask(null);
     } catch (err: any) {
       console.error('Failed to save edited task:', err);
       const errMsg = err?.message || err?.error_description || String(err);
-      alert(`Failed to save task: ${errMsg}`);
+      setNotification({
+        open: true,
+        severity: 'error',
+        message: `Failed to save task: ${errMsg}`
+      });
     } finally {
       setIsSaving(false);
     }
@@ -1443,6 +1499,26 @@ const ChamberPage = () => {
           </DialogActions>
         </Box>
       </Dialog>
+
+      <Snackbar 
+        open={notification.open} 
+        autoHideDuration={4000} 
+        onClose={() => setNotification(prev => ({ ...prev, open: false }))}
+      >
+        <Alert 
+          onClose={() => setNotification(prev => ({ ...prev, open: false }))} 
+          severity={notification.severity} 
+          sx={{ 
+            width: '100%', 
+            backgroundColor: notification.severity === 'error' ? '#ef5350' : notification.severity === 'warning' ? '#ff9800' : '#10B981', 
+            color: 'white',
+            fontWeight: 800,
+            borderRadius: '16px'
+          }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

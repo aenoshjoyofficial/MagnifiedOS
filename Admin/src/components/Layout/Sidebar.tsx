@@ -13,7 +13,8 @@ import {
   Tooltip,
   Divider,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  Switch
 } from '@mui/material';
 import { 
   LayoutDashboard, 
@@ -34,6 +35,14 @@ import {
   Award
 } from 'lucide-react';
 import { useUIStore, useAuthStore } from '@/store/useStore';
+import { useChambers } from '@/lib/queries';
+import * as LucideIcons from 'lucide-react';
+
+const getChamberIconComponent = (iconName: string | undefined) => {
+  if (!iconName) return LucideIcons.Brain;
+  const IconComp = (LucideIcons as any)[iconName];
+  return IconComp || LucideIcons.Brain;
+};
 
 const navItems = [
   { label: 'Admin Home', path: '/admin', icon: LayoutDashboard },
@@ -43,16 +52,7 @@ const navItems = [
   { label: 'Member Bookings', path: '/admin/bookings', icon: CheckSquare },
 ];
 
-const chamberItems = [
-  { label: 'Mental Clarity', path: '/admin/chambers/mental-clarity', icon: Brain },
-  { label: 'The Frequency Field', path: '/admin/chambers/frequency-field', icon: Waves },
-  { label: 'Field Design', path: '/admin/chambers/field-design', icon: Compass },
-  { label: 'The Living Frame', path: '/admin/chambers/living-frame', icon: GridIcon },
-  { label: 'The Plate', path: '/admin/chambers/the-plate', icon: Utensils },
-  { label: 'Breath Atelier', path: '/admin/chambers/breath-atelier', icon: Wind },
-  { label: 'The Signature', path: '/admin/chambers/the-signature', icon: Award },
-  { label: 'Sleep Cocoon', path: '/admin/chambers/sleep-cocoon', icon: Moon },
-];
+
 
 const Sidebar = () => {
   const location = useLocation();
@@ -61,6 +61,17 @@ const Sidebar = () => {
   const { signOut } = useAuthStore();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  const { data: chambers } = useChambers();
+  const [showHidden, setShowHidden] = React.useState(() => localStorage.getItem('show_hidden_chambers') === 'true');
+
+  const handleToggleHidden = () => {
+    setShowHidden(prev => {
+      const newVal = !prev;
+      localStorage.setItem('show_hidden_chambers', String(newVal));
+      return newVal;
+    });
+  };
 
   const drawerWidth = isSidebarOpen ? 260 : 80;
 
@@ -183,35 +194,48 @@ const Sidebar = () => {
 
       <Divider sx={{ my: 1.5, opacity: 0.05, backgroundColor: 'rgba(212, 175, 55, 0.2)' }} />
 
-      {isSidebarOpen && (
-        <Typography 
-          variant="caption" 
-          sx={{ 
-            px: 3, 
-            pt: 1, 
-            pb: 1, 
-            display: 'block', 
-            color: 'rgba(212, 175, 55, 0.4)', 
-            fontWeight: 800, 
-            letterSpacing: 1.5, 
-            textTransform: 'uppercase' 
-          }}
-        >
-          Chambers
-        </Typography>
-      )}
+      {isSidebarOpen ? (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 3, pt: 1, pb: 1 }}>
+          <Typography 
+            variant="caption" 
+            sx={{ 
+              color: 'rgba(212, 175, 55, 0.4)', 
+              fontWeight: 800, 
+              letterSpacing: 1.5, 
+              textTransform: 'uppercase' 
+            }}
+          >
+            Chambers
+          </Typography>
+          <Tooltip title="Show/Hide hidden chambers in sidebar" placement="top">
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.65rem' }}>Show Hidden</Typography>
+              <Switch 
+                size="small" 
+                checked={showHidden} 
+                onChange={handleToggleHidden} 
+                sx={{
+                  '& .MuiSwitch-switchBase.Mui-checked': { color: '#D4AF37' },
+                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#D4AF37' }
+                }}
+              />
+            </Box>
+          </Tooltip>
+        </Box>
+      ) : null}
 
       <List sx={{ px: 1.5 }}>
-        {chamberItems.map((item) => {
-          const isActive = pathname === item.path;
-          const Icon = item.icon;
+        {(chambers || []).filter(c => c.visible || showHidden).map((chamber) => {
+          const path = `/admin/chambers/${chamber.slug}`;
+          const isActive = pathname === path;
+          const Icon = getChamberIconComponent(chamber.icon);
 
           return (
-            <ListItem key={item.path} disablePadding sx={{ display: 'block', mb: 0.5 }}>
-              <Tooltip title={!isSidebarOpen ? item.label : ''} placement="right">
+            <ListItem key={chamber.id} disablePadding sx={{ display: 'block', mb: 0.5 }}>
+              <Tooltip title={!isSidebarOpen ? chamber.title : ''} placement="right">
                 <ListItemButton
                   component={Link}
-                  to={item.path}
+                  to={path}
                   sx={{
                     minHeight: 40,
                     justifyContent: isSidebarOpen ? 'initial' : 'center',
@@ -219,6 +243,7 @@ const Sidebar = () => {
                     borderRadius: 2,
                     backgroundColor: isActive ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
                     color: isActive ? '#D4AF37' : '#B0B0B0',
+                    opacity: chamber.visible ? 1 : 0.5,
                     '&:hover': {
                       backgroundColor: 'rgba(212, 175, 55, 0.05)',
                     },
@@ -236,12 +261,19 @@ const Sidebar = () => {
                   </ListItemIcon>
                   {isSidebarOpen && (
                     <ListItemText 
-                      primary={item.label} 
+                      primary={chamber.title} 
+                      secondary={!chamber.visible ? "Hidden" : undefined}
                       slotProps={{
                         primary: { 
                           sx: {
                             fontWeight: isActive ? 600 : 400,
                             fontSize: '0.85rem'
+                          }
+                        },
+                        secondary: {
+                          sx: {
+                            fontSize: '0.7rem',
+                            color: 'rgba(212, 175, 55, 0.5)'
                           }
                         }
                       }} 
@@ -252,6 +284,51 @@ const Sidebar = () => {
             </ListItem>
           );
         })}
+
+        <ListItem disablePadding sx={{ display: 'block', mb: 0.5 }}>
+          <Tooltip title={!isSidebarOpen ? "Configure Chambers" : ''} placement="right">
+            <ListItemButton
+              component={Link}
+              to="/admin/chambers"
+              sx={{
+                minHeight: 40,
+                justifyContent: isSidebarOpen ? 'initial' : 'center',
+                px: 2.5,
+                borderRadius: 2,
+                backgroundColor: pathname === '/admin/chambers' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
+                color: pathname === '/admin/chambers' ? '#D4AF37' : '#B0B0B0',
+                '&:hover': {
+                  backgroundColor: 'rgba(212, 175, 55, 0.05)',
+                },
+              }}
+            >
+              <ListItemIcon
+                sx={{
+                  minWidth: 0,
+                  mr: isSidebarOpen ? 2 : 'auto',
+                  justifyContent: 'center',
+                  color: pathname === '/admin/chambers' ? '#D4AF37' : 'inherit',
+                }}
+              >
+                <LucideIcons.Settings size={20} />
+              </ListItemIcon>
+              {isSidebarOpen && (
+                <ListItemText 
+                  primary="Configure Chambers" 
+                  slotProps={{
+                    primary: { 
+                      sx: {
+                        fontWeight: pathname === '/admin/chambers' ? 600 : 400,
+                        fontSize: '0.85rem',
+                        fontStyle: 'italic'
+                      }
+                    }
+                  }} 
+                />
+              )}
+            </ListItemButton>
+          </Tooltip>
+        </ListItem>
       </List>
 
       <Box sx={{ mt: 'auto', mb: 2, px: 1.5 }}>

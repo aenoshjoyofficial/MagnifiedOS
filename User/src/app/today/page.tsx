@@ -32,22 +32,12 @@ import PdfTask from '@/components/Tasks/PdfTask';
 import GalleryTask from '@/components/Tasks/GalleryTask';
 import ChecklistTask from '@/components/Tasks/ChecklistTask';
 import { useAuthStore } from '@/store/useStore';
-import { useMyEnrollment, useCompleteTask, useCompleteEnrollment, useStartNewCycle } from '@/lib/queries';
+import { useCompleteTask, useCompleteEnrollment, useStartNewCycle } from '@/lib/queries';
+import { useProgramEngine } from '@/lib/programEngine';
 import { supabase } from '@/lib/supabase';
-import { calculateDaysSinceStart, calculateActiveDay } from '@/lib/progression';
+import { Snackbar, Alert } from '@mui/material';
 
-const parseRoutineFromHtml = (html: string) => {
-  try {
-    if (!html) return null;
-    const match = html.match(/<script type="application\/json" id="routine-json">([\s\S]*?)<\/script>/);
-    if (match && match[1]) {
-      return JSON.parse(match[1].trim());
-    }
-  } catch (e) {
-    console.error('Error parsing routine from HTML:', e);
-  }
-  return null;
-};
+
 
 const TodayPractice = () => {
   const { user } = useAuthStore();
@@ -64,7 +54,8 @@ const TodayPractice = () => {
     findUserId();
   }, [user]);
 
-  const { data: enrollment, isLoading } = useMyEnrollment(targetUserId || '');
+  const engine = useProgramEngine(targetUserId || '');
+  const isLoading = engine.isLoading;
   const completeTaskMutation = useCompleteTask();
   const completeEnrollmentMutation = useCompleteEnrollment();
   const startNewCycleMutation = useStartNewCycle();
@@ -73,6 +64,16 @@ const TodayPractice = () => {
   const [isDaySubmitted, setIsDaySubmitted] = React.useState(false);
   const [completedCycleInfo, setCompletedCycleInfo] = React.useState<any>(null);
   const [visibleInstructions, setVisibleInstructions] = React.useState<Record<string, boolean>>({});
+
+  const [notification, setNotification] = React.useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({ open: false, message: '', severity: 'success' });
+
+  const showNotification = (message: string, severity: 'success' | 'error' | 'info' | 'warning' = 'success') => {
+    setNotification({ open: true, message, severity });
+  };
 
   const toggleInstruction = (windowName: string) => {
     setVisibleInstructions(prev => ({
@@ -84,78 +85,33 @@ const TodayPractice = () => {
   const [searchParams] = useSearchParams();
   const dayParam = searchParams.get('day');
 
-  const program = enrollment?.programs;
-
-  // Calculate days since start using the shared calendar day helper
-  const daysSinceStart = React.useMemo(() => {
-    return calculateDaysSinceStart(enrollment?.started_at);
-  }, [enrollment?.started_at]);
-
-  const totalDays = React.useMemo(() => {
-    if (!program?.modules) return program?.duration_days || 30;
-    return program.modules.reduce((acc: number, mod: any) => {
-      const maxModDay = mod.lessons?.reduce((lMax: number, lesson: any) => Math.max(lMax, lesson.day_number || 0), 0) || 0;
-      return Math.max(acc, maxModDay);
-    }, 0) || program.duration_days || 30;
-  }, [program]);
-
-  const allLessons = React.useMemo(() => {
-    return program?.modules?.flatMap((m: any) => 
-      (m.lessons || []).map((l: any) => ({
-        ...l,
-        moduleTitle: m.title,
-        moduleId: m.id
-      }))
-    ) || [];
-  }, [program]);
-
-  const completions = enrollment?.task_completions || [];
-
-  const completedKeys = React.useMemo(() => {
-    const taskMap: Record<string, { title: string; dayNumber: number }> = {};
-    program?.modules?.forEach((mod: any) => {
-      mod.lessons?.forEach((les: any) => {
-        les.tasks?.forEach((task: any) => {
-          taskMap[task.id] = { title: task.title, dayNumber: les.day_number };
-        });
-      });
-    });
-
-    const keys = new Set<string>();
-    completions.forEach((c: any) => {
-      const tInfo = taskMap[c.task_id];
-      if (tInfo) {
-        keys.add(`${tInfo.dayNumber}_${tInfo.title}`);
-      }
-    });
-
-    return keys;
-  }, [program, completions]);
+  const program = engine.program;
+  const enrollment = engine.enrollment;
+  const chambers = engine.chambers;
+  const completedKeys = engine.completedKeys;
+  const daysSinceStart = engine.daysSinceStart;
+  const totalDays = engine.totalDays;
 
   const viewedDay = React.useMemo(() => {
     if (dayParam) return Math.min(parseInt(dayParam, 10), totalDays);
-    return calculateActiveDay(program, completedKeys, daysSinceStart);
-  }, [dayParam, program, completedKeys, daysSinceStart, totalDays]);
+    return engine.activeDay;
+  }, [dayParam, engine.activeDay, totalDays]);
+
+  const allLessons = React.useMemo(() => {
+    return engine.getDailyLessons(viewedDay);
+  }, [engine, viewedDay]);
 
   const currentLesson = React.useMemo(() => {
-    if (allLessons.length === 0) return null;
-    return allLessons.find((l: any) => l.day_number === viewedDay) || allLessons.find((l: any) => l.day_number === 1) || allLessons[allLessons.length - 1];
-  }, [allLessons, viewedDay]);
+    return engine.getCurrentLesson(viewedDay);
+  }, [engine, viewedDay]);
 
   const tasks = React.useMemo(() => {
-    return allLessons
-      .filter((l: any) => l.day_number === viewedDay)
-      .flatMap((l: any) => (l.tasks || []).map((t: any) => ({
-        ...t,
-        moduleTitle: l.moduleTitle,
-        moduleId: l.moduleId
-      })));
-  }, [allLessons, viewedDay]);
+    return engine.getDailyTasks(viewedDay);
+  }, [engine, viewedDay]);
 
   const { completedTasks, isDayComplete } = React.useMemo(() => {
     const list = tasks.filter((t: any) => completedKeys.has(`${viewedDay}_${t.title}`));
     const complete = list.length === tasks.length && tasks.length > 0;
-    
     return {
       completedTasks: list,
       isDayComplete: complete
@@ -170,181 +126,62 @@ const TodayPractice = () => {
     }
   }, [enrollment, viewedDay, isDayComplete, daysSinceStart, totalDays]);
 
-  const { tasksCompleted, totalProgramTasks } = React.useMemo(() => {
-    let total = 0;
-    program?.modules?.forEach((mod: any) => {
-      mod.lessons?.forEach((les: any) => {
-        total += les.tasks?.length || 0;
-      });
-    });
-    return {
-      tasksCompleted: completions.length,
-      totalProgramTasks: total || 1
-    };
-  }, [program, completions]);
+  const tasksCompleted = engine.completedTasksCount;
+  const totalProgramTasks = engine.totalTasksCount;
 
   const handleFinishDay = async () => {
     console.log("Finish Day clicked");
-    if (viewedDay === totalDays && enrollment) {
-      const pct = Math.round((tasksCompleted / totalProgramTasks) * 100);
-      const cycleInfo = {
-        cycle_number: enrollment.cycle_number || 1,
-        program_title: program?.title || 'Program',
-        user_id: enrollment.user_id,
-        program_id: enrollment.program_id
-      };
-      await completeEnrollmentMutation.mutateAsync({
-        enrollmentId: enrollment.id,
-        cycleNumber: enrollment.cycle_number || 1,
-        startedAt: enrollment.started_at,
-        userId: enrollment.user_id,
-        programId: enrollment.program_id,
-        tasksCompleted,
-        totalTasks: totalProgramTasks,
-        completionPercentage: pct
-      });
-      setCompletedCycleInfo(cycleInfo);
+    try {
+      if (viewedDay === totalDays && enrollment) {
+        const pct = Math.round((tasksCompleted / totalProgramTasks) * 100);
+        const cycleInfo = {
+          cycle_number: enrollment.cycle_number || 1,
+          program_title: program?.title || 'Program',
+          user_id: enrollment.user_id,
+          program_id: enrollment.program_id
+        };
+        await completeEnrollmentMutation.mutateAsync({
+          enrollmentId: enrollment.id,
+          cycleNumber: enrollment.cycle_number || 1,
+          startedAt: enrollment.started_at,
+          userId: enrollment.user_id,
+          programId: enrollment.program_id,
+          tasksCompleted,
+          totalTasks: totalProgramTasks,
+          completionPercentage: pct
+        });
+        setCompletedCycleInfo(cycleInfo);
+      }
+      setIsDaySubmitted(true);
+      showNotification("Day completion recorded successfully!", "success");
+    } catch (err: any) {
+      console.error("Day completion failed:", err);
+      showNotification(err?.message || "Failed to complete day. Please check your connection and try again.", "error");
     }
-    setIsDaySubmitted(true);
   };
 
 
 
-  const parsedRoutine = React.useMemo(() => {
-    const dayLessons = allLessons.filter((l: any) => l.day_number === viewedDay);
-    const combined: any[] = [];
-    const seen = new Set<string>();
-    
-    // 1. Parse routines from lesson description HTML
-    dayLessons.forEach((l: any) => {
-      const routine = parseRoutineFromHtml(l.description || '');
-      if (routine && routine.length > 0) {
-        routine.forEach((item: any) => {
-          const key = `${item.window}_${item.system}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            combined.push(item);
-          }
-        });
-      }
-    });
-
-    // 2. Synthesize missing routine cards for any tasks that don't have matching card elements
-    const standardWindows = ['Morning', 'Mid-Morning', 'Midday', 'Afternoon', 'Evening', 'Night'];
-    dayLessons.forEach((l: any) => {
-      const lessonTasks = l.tasks || [];
-      lessonTasks.forEach((t: any) => {
-        const rawWindow = t.content?.routine_window;
-        if (!rawWindow) return;
-        const matchingWindow = standardWindows.find(w => w.toLowerCase() === rawWindow.toLowerCase());
-        if (!matchingWindow) return;
-        
-        const systemName = l.moduleTitle || 'Daily Integration';
-        
-        // Check if there is already a routine item in 'combined' for this window and a matching system name
-        const alreadyExists = combined.some((item: any) => {
-          if (item.window.toLowerCase() !== matchingWindow.toLowerCase()) return false;
-          const itemSys = item.system.trim().toLowerCase();
-          const taskSys = systemName.trim().toLowerCase();
-          return itemSys.includes(taskSys) || taskSys.includes(itemSys);
-        });
-        
-        if (!alreadyExists) {
-          combined.push({
-            window: matchingWindow,
-            system: systemName,
-            anchor: 'Daily Protocol',
-            instruction: ''
-          });
-        }
-      });
-    });
-
-    // 3. De-duplicate and merge cards with similar system names in the same window (e.g. "Breath Atelier" vs "Chamber: BREATH ATELIER")
-    const uniqueCombined: any[] = [];
-    combined.forEach((item: any) => {
-      const duplicateIdx = uniqueCombined.findIndex((existing: any) => {
-        if (existing.window.toLowerCase() !== item.window.toLowerCase()) return false;
-        const s1 = existing.system.trim().toLowerCase();
-        const s2 = item.system.trim().toLowerCase();
-        return s1.includes(s2) || s2.includes(s1);
-      });
-      
-      if (duplicateIdx > -1) {
-        const existing = uniqueCombined[duplicateIdx];
-        if (item.system.length > existing.system.length) {
-          uniqueCombined[duplicateIdx] = {
-            ...item,
-            instruction: item.instruction || existing.instruction,
-            anchor: item.anchor || existing.anchor
-          };
-        } else {
-          uniqueCombined[duplicateIdx] = {
-            ...existing,
-            instruction: existing.instruction || item.instruction,
-            anchor: existing.anchor || item.anchor
-          };
-        }
-      } else {
-        uniqueCombined.push(item);
-      }
-    });
-
-    // 4. Sort uniqueCombined chronologically by window name
-    const orderMap: Record<string, number> = {
-      'morning': 1,
-      'mid-morning': 2,
-      'midday': 3,
-      'afternoon': 4,
-      'evening': 5,
-      'night': 6
-    };
-
-    uniqueCombined.sort((a: any, b: any) => {
-      const orderA = orderMap[a.window.toLowerCase()] || 99;
-      const orderB = orderMap[b.window.toLowerCase()] || 99;
-      if (orderA !== orderB) {
-        return orderA - orderB;
-      }
-      return a.system.localeCompare(b.system);
-    });
-
-    return uniqueCombined.length > 0 ? uniqueCombined : null;
-  }, [allLessons, viewedDay]);
-
-  // Helper functions (must be defined before lockedTaskIds useMemo)
-  const getTasksForWindow = React.useCallback((windowName: string, systemName?: string) => {
-    return tasks.filter((t: any) => {
-      const taskWindow = t.content?.routine_window;
-      const windowMatch = taskWindow && taskWindow.toLowerCase() === windowName.toLowerCase();
-      if (!windowMatch) return false;
-      if (!systemName) return true;
-      const taskModule = (t.moduleTitle || '').trim().toLowerCase();
-      const sysName = systemName.trim().toLowerCase();
-      return taskModule.includes(sysName) || sysName.includes(taskModule);
-    });
-  }, [tasks]);
-
-  const getUnassignedTasks = React.useCallback(() => {
-    const routineWindows = ['morning', 'mid-morning', 'midday', 'afternoon', 'evening', 'night'];
-    return tasks.filter((t: any) => {
-      const taskWindow = t.content?.routine_window;
-      return !taskWindow || !routineWindows.includes(taskWindow.toLowerCase());
-    });
-  }, [tasks]);
+  const visibleOrderedChambers = React.useMemo(() => {
+    return engine.getVisibleChambers();
+  }, [engine]);
 
   // IMPORTANT: lockedTaskIds must be declared BEFORE any early returns to satisfy Rules of Hooks
   const lockedTaskIds = React.useMemo(() => {
     const orderedTasks: any[] = [];
-    if (parsedRoutine) {
-      parsedRoutine.forEach((item: any) => {
-        const windowTasks = getTasksForWindow(item.window, item.system);
-        orderedTasks.push(...windowTasks);
+    visibleOrderedChambers.forEach((chamber: any) => {
+      const module = engine.visibleModules.find((m: any) => {
+        const foundChamber = engine.getChamberForModule(m);
+        return foundChamber && foundChamber.id === chamber.id;
       });
-      orderedTasks.push(...getUnassignedTasks());
-    } else {
-      orderedTasks.push(...tasks);
-    }
+      if (module) {
+        const lesson = module.lessons?.find((l: any) => l.day_number === viewedDay);
+        if (lesson && lesson.tasks) {
+          const sortedTasks = [...lesson.tasks].sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0));
+          orderedTasks.push(...sortedTasks);
+        }
+      }
+    });
 
     const lockedSet = new Set<string>();
     let foundFirstUncompleted = false;
@@ -361,7 +198,7 @@ const TodayPractice = () => {
     });
 
     return lockedSet;
-  }, [parsedRoutine, tasks, completedKeys, viewedDay, getTasksForWindow, getUnassignedTasks]);
+  }, [visibleOrderedChambers, engine.visibleModules, viewedDay, completedKeys]);
 
   const handleTaskComplete = async (taskId: string) => {
     if (!enrollment) return;
@@ -370,7 +207,7 @@ const TodayPractice = () => {
     if (completedKeys.has(`${viewedDay}_${task.title}`)) return;
 
     if (lockedTaskIds.has(taskId)) {
-      alert("First complete the previous task in order to complete this task.");
+      showNotification("First complete the previous task in order to complete this task.", "warning");
       return;
     }
 
@@ -379,11 +216,17 @@ const TodayPractice = () => {
       return;
     }
     
-    await completeTaskMutation.mutateAsync({
-      enrollmentId: enrollment.id,
-      taskId: taskId,
-      userId: user?.id
-    });
+    try {
+      await completeTaskMutation.mutateAsync({
+        enrollmentId: enrollment.id,
+        taskId: taskId,
+        userId: user?.id
+      });
+      showNotification(`Task "${task.title}" completed! Next task unlocked.`, "success");
+    } catch (err: any) {
+      console.error("Task completion failed:", err);
+      showNotification(err?.message || "Failed to save task completion. Please try again.", "error");
+    }
   };
 
   // Early returns must come AFTER all hooks
@@ -591,19 +434,30 @@ const TodayPractice = () => {
         </Box>
       </Box>
 
-      {/* Routine Windows & Nested Tasks */}
-      {parsedRoutine ? (
+      {visibleOrderedChambers && visibleOrderedChambers.length > 0 ? (
         <Stack spacing={4} sx={{ mb: 6 }}>
-          {parsedRoutine.map((item: any, idx: number) => {
-            const windowTasks = getTasksForWindow(item.window, item.system);
-            if (windowTasks.length === 0) return null;
+          {visibleOrderedChambers.map((chamber: any) => {
+            const module = engine.visibleModules.find((m: any) => {
+              const foundChamber = engine.getChamberForModule(m);
+              return foundChamber && foundChamber.id === chamber.id;
+            });
+            if (!module) return null;
+
+            const lesson = module.lessons?.find((l: any) => l.day_number === viewedDay);
+            if (!lesson) return null;
+
+            const lessonTasks = lesson.tasks || [];
+            if (lessonTasks.length === 0) return null;
+
+            const sortedTasks = [...lessonTasks].sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0));
+
             return (
-              <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box key={chamber.id} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {/* Premium Accentuated Chamber Header */}
                 <Box 
                   sx={{ 
                     borderLeft: '4px solid',
-                    borderColor: windowTasks.length > 0 ? '#00D4A3' : 'rgba(255, 255, 255, 0.15)',
+                    borderColor: '#00D4A3',
                     pl: 3,
                     py: 1.25,
                     textAlign: 'left',
@@ -616,7 +470,7 @@ const TodayPractice = () => {
                   <Typography 
                     variant="caption" 
                     sx={{ 
-                      color: windowTasks.length > 0 ? '#D4AF37' : '#888', 
+                      color: '#D4AF37', 
                       fontWeight: 800, 
                       letterSpacing: '0.15em', 
                       textTransform: 'uppercase',
@@ -624,7 +478,7 @@ const TodayPractice = () => {
                       fontFamily: '"Outfit", sans-serif'
                     }}
                   >
-                    {item.window}
+                    CHAMBER {chamber.display_order}
                   </Typography>
                   <Typography 
                     variant="h5" 
@@ -638,16 +492,16 @@ const TodayPractice = () => {
                       textShadow: '0 2px 10px rgba(0, 212, 163, 0.15)'
                     }}
                   >
-                    {item.system}
+                    {chamber.title}
                   </Typography>
                   <Typography variant="body2" sx={{ color: '#F0D27A', fontSize: '0.85rem', mt: 0.5, fontWeight: 600, letterSpacing: '0.02em', opacity: 0.9 }}>
-                    Anchor: {item.anchor}
+                    Anchor: {lesson.title}
                   </Typography>
 
-                  {item.instruction && (
+                  {lesson.description && (
                     <Box sx={{ mt: 1.5 }}>
                       <Button 
-                        onClick={() => toggleInstruction(item.window)} 
+                        onClick={() => toggleInstruction(chamber.id)} 
                         sx={{ 
                           color: '#D4AF37', 
                           fontSize: '0.75rem', 
@@ -658,9 +512,9 @@ const TodayPractice = () => {
                           '&:hover': { background: 'transparent', textDecoration: 'underline' } 
                         }}
                       >
-                        {visibleInstructions[item.window] ? 'Hide Instructions' : 'View Instructions'}
+                        {visibleInstructions[chamber.id] ? 'Hide Instructions' : 'View Instructions'}
                       </Button>
-                      {visibleInstructions[item.window] && (
+                      {visibleInstructions[chamber.id] && (
                         <Box 
                           sx={{ 
                             mt: 2, 
@@ -676,104 +530,36 @@ const TodayPractice = () => {
                             '& p': { my: 0.5 }
                           }}
                         >
-                          <div dangerouslySetInnerHTML={{ __html: item.instruction }} />
+                          <div dangerouslySetInnerHTML={{ __html: lesson.description }} />
                         </Box>
                       )}
                     </Box>
                   )}
                 </Box>
 
-                {/* Nested Tasks for this window */}
-                {windowTasks.length > 0 && (
-                  <Stack spacing={1.5} sx={{ pl: { xs: 1.5, sm: 3 } }}>
-                    {windowTasks.map((task: any) => {
-                      const globalIndex = tasks.findIndex((t: any) => t.id === task.id);
-                      return (
-                        <TaskCard 
-                          key={task.id} 
-                          task={task} 
-                          index={globalIndex} 
-                          isCompleted={completedKeys.has(`${viewedDay}_${task.title}`)}
-                          isLocked={lockedTaskIds.has(task.id)}
-                          isPending={completeTaskMutation.isPending && completeTaskMutation.variables?.taskId === task.id}
-                          onComplete={() => handleTaskComplete(task.id)} 
-                        />
-                      );
-                    })}
-                  </Stack>
-                )}
+                {/* Nested Tasks for this chamber */}
+                <Stack spacing={1.5} sx={{ pl: { xs: 1.5, sm: 3 } }}>
+                  {sortedTasks.map((task: any) => {
+                    const globalIndex = tasks.findIndex((t: any) => t.id === task.id);
+                    return (
+                      <TaskCard 
+                        key={task.id} 
+                        task={task} 
+                        index={globalIndex} 
+                        isCompleted={completedKeys.has(`${viewedDay}_${task.title}`)}
+                        isLocked={lockedTaskIds.has(task.id)}
+                        isPending={completeTaskMutation.isPending && completeTaskMutation.variables?.taskId === task.id}
+                        onComplete={() => handleTaskComplete(task.id)} 
+                      />
+                    );
+                  })}
+                </Stack>
               </Box>
             );
           })}
-
-          {/* Unassigned/General Tasks */}
-          {getUnassignedTasks().length > 0 && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Box 
-                sx={{ 
-                  borderLeft: '3px solid rgba(255, 255, 255, 0.3)',
-                  pl: 2.5,
-                  py: 0.5,
-                  textAlign: 'left'
-                }}
-              >
-                <Typography variant="caption" sx={{ color: '#888', fontWeight: 800, fontSize: '0.75rem', letterSpacing: 1.5, textTransform: 'uppercase' }}>
-                  General Practices
-                </Typography>
-              </Box>
-              <Stack spacing={1.5} sx={{ pl: { xs: 1.5, sm: 3 } }}>
-                {getUnassignedTasks().map((task: any) => {
-                  const globalIndex = tasks.findIndex((t: any) => t.id === task.id);
-                  return (
-                    <TaskCard 
-                      key={task.id} 
-                      task={task} 
-                      index={globalIndex} 
-                      isCompleted={completedKeys.has(`${viewedDay}_${task.title}`)}
-                      isLocked={lockedTaskIds.has(task.id)}
-                      isPending={completeTaskMutation.isPending && completeTaskMutation.variables?.taskId === task.id}
-                      onComplete={() => handleTaskComplete(task.id)} 
-                    />
-                  );
-                })}
-              </Stack>
-            </Box>
-          )}
         </Stack>
       ) : (
-        /* Legacy fallback rendering */
-        <>
-          {currentLesson?.description && (
-            <Typography 
-              variant="body1" 
-              sx={{ 
-                color: '#B0B0B0', 
-                mb: 4,
-                lineHeight: 1.6,
-                '& ul, & ol': { pl: 3, my: 1 },
-                '& p': { my: 1 }
-              }}
-              dangerouslySetInnerHTML={{ __html: currentLesson.description }}
-            />
-          )}
-
-          <Stack spacing={2} sx={{ mb: 6 }}>
-            {tasks.map((task: any, index: number) => (
-              <TaskCard 
-                key={task.id} 
-                task={task} 
-                index={index} 
-                isCompleted={completedKeys.has(`${viewedDay}_${task.title}`)}
-                isLocked={lockedTaskIds.has(task.id)}
-                isPending={completeTaskMutation.isPending && completeTaskMutation.variables?.taskId === task.id}
-                onComplete={() => handleTaskComplete(task.id)} 
-              />
-            ))}
-            {tasks.length === 0 && (
-              <Typography sx={{ textAlign: 'center', py: 4, color: '#666' }}>No tasks found for today.</Typography>
-            )}
-          </Stack>
-        </>
+        <Typography sx={{ textAlign: 'center', py: 4, color: '#666' }}>No active chambers or tasks found for today.</Typography>
       )}
 
       {/* Global Actions */}
@@ -842,10 +628,31 @@ const TodayPractice = () => {
               '&.Mui-disabled': { background: 'rgba(255, 255, 255, 0.05)', color: 'rgba(255, 255, 255, 0.2)' }
             }}
           >
-            {completeEnrollmentMutation.isPending ? 'Completing Cycle...' : 'Complete All Tasks to Finish Day'}
+            {completeEnrollmentMutation.isPending ? 'Completing Cycle...' : 
+              isDayComplete ? (viewedDay === totalDays ? 'Complete Cycle & Submit Program' : 'Submit Day Practice') : 'Complete All Tasks to Finish Day'}
           </Button>
         )}
       </Box>
+
+      <Snackbar 
+        open={notification.open} 
+        autoHideDuration={6000} 
+        onClose={() => setNotification(prev => ({ ...prev, open: false }))}
+      >
+        <Alert 
+          onClose={() => setNotification(prev => ({ ...prev, open: false }))} 
+          severity={notification.severity} 
+          sx={{ 
+            width: '100%', 
+            backgroundColor: notification.severity === 'error' ? '#ef5350' : notification.severity === 'warning' ? '#ff9800' : '#D4AF37', 
+            color: '#040D0C',
+            fontWeight: 800,
+            borderRadius: '16px'
+          }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

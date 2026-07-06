@@ -16,6 +16,7 @@ import ProgramBuilderPage from './app/admin/program-builder/page';
 import SessionManagerPage from './app/admin/sessions/page';
 import BookingsPage from './app/admin/bookings/page';
 import ChamberPlaceholderPage from './app/admin/chambers/page';
+import ChamberManagerPage from './app/admin/chambers/ChamberManagerPage';
 
 import { useAuthStore } from './store/useStore';
 
@@ -44,6 +45,7 @@ const App = () => {
           <Route path="/admin/program-builder" element={<AuthGuard><ProgramBuilderPage /></AuthGuard>} />
           <Route path="/admin/sessions" element={<AuthGuard><SessionManagerPage /></AuthGuard>} />
           <Route path="/admin/bookings" element={<AuthGuard><BookingsPage /></AuthGuard>} />
+          <Route path="/admin/chambers" element={<AuthGuard><ChamberManagerPage /></AuthGuard>} />
           <Route path="/admin/chambers/:chamberId" element={<AuthGuard><ChamberPlaceholderPage /></AuthGuard>} />
 
           {/* Catch all */}

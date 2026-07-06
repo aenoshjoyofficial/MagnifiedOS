@@ -1,6 +1,41 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
 
+export interface Chamber {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string;
+  icon?: string;
+  display_order: number;
+  visible: boolean;
+  active: boolean;
+  coming_soon: boolean;
+  premium_only: boolean;
+  color_accent?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * Fetch all chambers from the database sorted by display_order
+ */
+export const useChambers = () => {
+  return useQuery({
+    queryKey: ['chambers'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('chambers')
+        .select('*')
+        .order('display_order', { ascending: true });
+      
+      if (error) throw error;
+      return data as Chamber[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
 // --- User Hooks ---
 
 /**
@@ -59,6 +94,7 @@ export const useMyEnrollment = (userId: string) => {
       return data;
     },
     enabled: !!userId,
+    staleTime: 10 * 1000,
   });
 };
 

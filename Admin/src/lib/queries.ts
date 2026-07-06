@@ -81,7 +81,62 @@ export interface CollectiveSession {
   created_at?: string;
 }
 
+export interface Chamber {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string;
+  icon?: string;
+  display_order: number;
+  visible: boolean;
+  active: boolean;
+  coming_soon: boolean;
+  premium_only: boolean;
+  color_accent?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // --- Admin Hooks ---
+
+/**
+ * Fetch all chambers from database
+ */
+export const useChambers = () => {
+  return useQuery({
+    queryKey: ['chambers'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('chambers')
+        .select('*')
+        .order('display_order', { ascending: true });
+      if (error) throw error;
+      return data as Chamber[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+/**
+ * Create or update a chamber config
+ */
+export const useSaveChamber = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (chamber: Partial<Chamber>) => {
+      const { data, error } = await supabase
+        .from('chambers')
+        .upsert(chamber)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as Chamber;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chambers'] });
+    }
+  });
+};
 
 /**
  * Fetch all users with their active enrollments and progress

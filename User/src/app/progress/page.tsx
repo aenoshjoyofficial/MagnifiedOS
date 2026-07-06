@@ -19,7 +19,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { useAuthStore } from '@/store/useStore';
-import { useMyEnrollment } from '@/lib/queries';
+import { useProgramEngine } from '@/lib/programEngine';
 import { supabase } from '@/lib/supabase';
 
 const Progress = () => {
@@ -32,12 +32,12 @@ const Progress = () => {
         setTargetUserId(user.id);
         return;
       }
-      // No hardcoded email fallback - unauthenticated users are handled by AuthGuard
     };
     findUserId();
   }, [user]);
 
-  const { data: enrollment, isLoading } = useMyEnrollment(targetUserId || '');
+  const engine = useProgramEngine(targetUserId || '');
+  const isLoading = engine.isLoading;
 
   if (isLoading) {
     return (
@@ -47,108 +47,15 @@ const Progress = () => {
     );
   }
 
-  const program = enrollment?.programs;
-  const completions = enrollment?.task_completions || [];
-  
-  // Calculate Streak
-  const calculateStreak = () => {
-    if (completions.length === 0) return 0;
-    
-    const getNYParts = (d: Date) => {
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-      });
-      const parts = formatter.formatToParts(d);
-      const year = parts.find(p => p.type === 'year')!.value;
-      const month = parts.find(p => p.type === 'month')!.value;
-      const day = parts.find(p => p.type === 'day')!.value;
-      return {
-        year: parseInt(year, 10),
-        month: parseInt(month, 10),
-        day: parseInt(day, 10),
-        formatted: `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-      };
-    };
-
-    const getNYMidnight = (d: Date) => {
-      const parts = getNYParts(d);
-      return new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
-    };
-
-    const formatNYDate = (d: Date) => {
-      return getNYParts(d).formatted;
-    };
-
-    // Get unique calendar dates (YYYY-MM-DD) in Eastern Time
-    const dates = [...new Set(completions.map((c: any) => {
-      return formatNYDate(new Date(c.completed_at));
-    }))] as string[];
-    dates.sort().reverse(); // Most recent first
-    
-    // Build today and yesterday with time zeroed out in Eastern Time
-    const todayNYDate = getNYMidnight(new Date());
-    const today = formatNYDate(todayNYDate);
-
-    const yesterdayNYDate = new Date(todayNYDate);
-    yesterdayNYDate.setUTCDate(todayNYDate.getUTCDate() - 1);
-    const yesterday = formatNYDate(yesterdayNYDate);
-    
-    // If the latest completion wasn't today or yesterday in Eastern Time, streak is 0
-    if (dates[0] !== today && dates[0] !== yesterday) return 0;
-    
-    // Count consecutive days going backward from the most recent completion
-    let streak = 0;
-    const baseDate = new Date(dates[0] + 'T00:00:00Z'); // Parse as UTC to avoid local timezone offset shifts
-    for (let i = 0; i < dates.length; i++) {
-      const expectedDate = new Date(baseDate);
-      expectedDate.setUTCDate(baseDate.getUTCDate() - i);
-      const expected = expectedDate.toISOString().split('T')[0];
-
-      if (dates[i] === expected) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-    return streak;
-  };
-
-  const { totalTasks, completedCount, completedKeys } = React.useMemo(() => {
-    const taskMap: Record<string, { title: string; dayNumber: number }> = {};
-    const allTaskKeys = new Set<string>();
-    
-    program?.modules?.forEach((mod: any) => {
-      mod.lessons?.forEach((les: any) => {
-        les.tasks?.forEach((task: any) => {
-          taskMap[task.id] = {
-            title: task.title,
-            dayNumber: les.day_number
-          };
-          allTaskKeys.add(`${les.day_number}_${task.title}`);
-        });
-      });
-    });
-    
-    const completedKeys = new Set<string>();
-    completions.forEach((c: any) => {
-      const tInfo = taskMap[c.task_id];
-      if (tInfo) {
-        completedKeys.add(`${tInfo.dayNumber}_${tInfo.title}`);
-      }
-    });
-    
-    return {
-      totalTasks: allTaskKeys.size || 1, // Fallback to 1 to prevent division by zero (not an arbitrary value)
-      completedCount: completedKeys.size,
-      completedKeys
-    };
-  }, [program, completions]);
-  
-  const progressPercent = Math.round((completedCount / totalTasks) * 100);
-  const currentStreak = calculateStreak();
+  const program = engine.program;
+  const enrollment = engine.enrollment;
+  const visibleModules = engine.visibleModules;
+  const completedKeys = engine.completedKeys;
+  const completedCount = engine.completedTasksCount;
+  const totalTasks = engine.totalTasksCount;
+  const progressPercent = engine.programCompletionPercent;
+  const currentStreak = engine.currentStreak;
+  const completions = engine.getCompletedTasks();
 
   const stats = [
     { label: 'Total Completions', value: completedCount, icon: CheckCircle2, color: '#00D4A3' },
@@ -233,7 +140,7 @@ const Progress = () => {
           >
             <Typography variant="h6" sx={{ fontWeight: 800, mb: 4, fontFamily: '"Playfair Display", serif' }}>Module Breakdown</Typography>
             <Stack spacing={3.5}>
-              {program?.modules?.map((module: any) => {
+              {visibleModules?.map((module: any) => {
                 const modTasks = module.lessons?.flatMap((l: any) => l.tasks || []) || [];
                 const modCompletions = modTasks.filter((t: any) => {
                   const lesson = module.lessons.find((l: any) => l.tasks?.some((tk: any) => tk.id === t.id));
